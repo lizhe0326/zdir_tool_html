@@ -15,6 +15,7 @@
 | `tool_m3utxt.html`  | 格式转换工具：支持 m3u 格式与 txt 格式文件双向转换，同时支持自定义 EPG 配置   |
 | `tool_qrcode.html`  | 二维码生成器：输入文本、链接、联系方式等内容，实时生成可保存的二维码图片     |
 | `tool_tvpage.html`  | 直播源汇总工具：收集 GitHub 平台公开的直播源与接口源资源，支持点击一键复制   |
+| `tool_docker-converter.html`  | docker配置转换：支持docker和docker-composep配置互相转换   |
 
 ## 使用方式
 1. 将所需工具的 `.html` 文件下载至本地设备；
