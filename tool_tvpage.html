@@ -1,0 +1,981 @@
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>直播源与接口源分享平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- 配置Tailwind自定义主题 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#36CFC9',
+            dark: '#1D2129',
+            'dark-light': '#272E3B',
+            success: '#52C41A',
+            danger: '#FF4D4F',
+            warning: '#FAAD14',
+            pending: '#722ED1'
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            'card': '0 4px 20px rgba(0, 0, 0, 0.15)',
+            'card-hover': '0 8px 30px rgba(22, 93, 255, 0.2)',
+          }
+        },
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .card-gradient {
+        background: linear-gradient(135deg, rgba(29, 33, 41, 0.9) 0%, rgba(39, 46, 59, 0.95) 100%);
+      }
+      .bg-glass {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+      }
+      .text-shadow {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .card-collapsed {
+        max-height: 60px;
+        overflow: hidden;
+      }
+      .card-expanded {
+        max-height: 500px;
+        overflow: visible;
+      }
+      .collapsed-hidden {
+        display: none;
+      }
+      .expanded-visible {
+        display: block;
+      }
+      .test-details {
+        font-size: 0.75rem;
+        color: #8c8c8c;
+        margin-top: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body class="font-inter bg-gradient-to-br from-dark to-dark-light text-gray-100 min-h-screen">
+  <!-- 页面头部 -->
+  <header class="sticky top-0 z-50 bg-glass border-b border-gray-700/30">
+    <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+      <div class="flex items-center space-x-3 mb-4 md:mb-0">
+        <i class="fa fa-television text-primary text-2xl"></i>
+        <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-shadow">
+          直播源与接口源分享平台
+        </h1>
+      </div>
+      
+      <div class="flex flex-col items-center gap-3 justify-center w-full md:w-auto">
+        <div class="flex flex-wrap gap-3 justify-center w-full md:w-auto">
+          <button id="testAllBtn" class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg">
+            <i class="fa fa-check-circle"></i>
+            <span>测试所有链接</span>
+          </button>
+          <button id="toggleAllBtn" class="flex items-center gap-2 bg-dark-light hover:bg-dark-light/80 text-white px-4 py-2 rounded-lg transition-all duration-300">
+            <i class="fa fa-plus-square"></i>
+            <span>展开全部</span>
+          </button>
+        </div>
+        <!-- 新增的备注信息 -->
+        <p class="text-xs text-gray-400 italic max-w-md text-center">
+          <i class="fa fa-info-circle text-warning mr-1"></i>
+          由于网络设备不同，测试仅供参考，所有源请自行确认可用性
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要内容区 -->
+  <main class="container mx-auto px-4 py-8">
+    <!-- 状态提示区 -->
+    <div id="statusMessage" class="hidden mb-6 p-4 rounded-lg flex items-center gap-3"></div>
+    
+    <!-- 推荐在线源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-star text-warning text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">推荐在线源</h2>
+        <span class="bg-warning/20 text-warning text-sm px-3 py-1 rounded-full" id="recommendedSourceCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="recommendedSourcesContainer">
+        <!-- 推荐在线源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+    
+    <!-- 纯IPv4源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-wifi text-success text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">纯 IPv4 源</h2>
+        <span class="bg-success/20 text-success text-sm px-3 py-1 rounded-full" id="ipv4SourceCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="ipv4SourcesContainer">
+        <!-- 纯IPv4源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+    
+    <!-- 纯IPv6源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-wifi text-primary text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">纯 IPv6 源</h2>
+        <span class="bg-primary/20 text-primary text-sm px-3 py-1 rounded-full" id="ipv6SourceCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="ipv6SourcesContainer">
+        <!-- 纯IPv6源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+    
+    <!-- 混合IP源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-exchange text-secondary text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">混合 IP 源</h2>
+        <span class="bg-secondary/20 text-secondary text-sm px-3 py-1 rounded-full" id="mixedSourceCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="mixedSourcesContainer">
+        <!-- 混合IP源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+    
+    <!-- 海外源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-globe text-pending text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">海外源</h2>
+        <span class="bg-pending/20 text-pending text-sm px-3 py-1 rounded-full" id="overseasSourceCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="overseasSourcesContainer">
+        <!-- 海外源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+    
+    <!-- 其他直播源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-ellipsis-h text-gray-400 text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">其他直播源</h2>
+        <span class="bg-gray-700/50 text-gray-300 text-sm px-3 py-1 rounded-full" id="otherSourceCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="otherSourcesContainer">
+        <!-- 其他直播源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+
+    <!-- 单仓接口源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-cube text-primary text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">单仓接口源</h2>
+        <span class="bg-primary/20 text-primary text-sm px-3 py-1 rounded-full" id="singleWarehouseCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="singleWarehouseContainer">
+        <!-- 单仓接口源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+
+    <!-- 多仓接口源部分 -->
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa fa-cubes text-secondary text-xl"></i>
+        <h2 class="text-[clamp(1.2rem,2vw,1.5rem)] font-semibold">多仓接口源</h2>
+        <span class="bg-secondary/20 text-secondary text-sm px-3 py-1 rounded-full" id="multiWarehouseCount">0 个源</span>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="multiWarehouseContainer">
+        <!-- 多仓接口源卡片将通过JavaScript动态生成 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="bg-dark border-t border-gray-800 py-6">
+    <div class="container mx-auto px-4 text-center text-gray-400 text-sm">
+      <p>© 2023 直播源与接口源分享平台 | 所有链接均来自网络，仅供测试使用</p>
+      <p class="mt-2">点击卡片即可复制对应链接 | 可通过顶部按钮测试所有链接</p>
+    </div>
+  </footer>
+
+  <!-- 复制成功提示 -->
+  <div id="copyToast" class="fixed bottom-6 right-6 bg-success text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-2 z-50">
+    <i class="fa fa-check-circle"></i>
+    <span>链接已复制到剪贴板</span>
+  </div>
+
+  <!-- 复制失败提示 -->
+  <div id="copyErrorToast" class="fixed bottom-6 right-6 bg-danger text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-2 z-50">
+    <i class="fa fa-exclamation-circle"></i>
+    <span>复制失败，请手动复制</span>
+  </div>
+
+  <script>
+    // 存储所有源数据的全局变量 - 作为网页后台数据
+    let sources = {
+      recommendedSources: [],
+      ipv4Sources: [],
+      ipv6Sources: [],
+      mixedSources: [],
+      overseasSources: [],
+      otherSources: [],
+      singleWarehouseSources: [],
+      multiWarehouseSources: []
+    };
+    
+    // 初始化真实数据源 - 将用户提供的直播源写入"后台"
+    const initBackendSources = () => {
+      // 解析推荐在线源
+      const recommendedSourceData = `
+ https://live.zbds.top/tv/iptv4.txt  # 直播电视IPV4
+ https://szyyds.cn/tv/live/x.txt  # 小马影视
+ http://47.120.41.246:8899/zb.txt  # IPTV直播
+ https://live.kilvn.com/iptv.m3u  # 上游范明明源
+ https://raw.githubusercontent.com/PizazzGY/TV/master/output/user_result.txt   # 潇洒AI直播
+ https://raw.githubusercontent.com/PizazzGY/TV/master/output/user_result.m3u   # 潇洒AI直播
+ https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/result.m3u   # IPTV 默认源
+ https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/ipv4/result.m3u   # IPTV IPv4
+ https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/ipv6/result.m3u   # IPTV IPv6
+ https://raw.githubusercontent.com/suxuang/myIPTV/refs/heads/main/ipv4.m3u # myIPTV IPv4
+ https://raw.githubusercontent.com/suxuang/myIPTV/refs/heads/main/ipv6.m3u # myIPTV IPv6
+      `;
+      
+      // 解析纯IPv4源
+      const ipv4SourceData = `
+ https://live.zbds.top/tv/iptv4.txt # 自动扫描直播源 IPTV4
+ https://live.zbds.top/tv/iptv4.m3u # M3U 格式直播源
+ https://raw.githubusercontent.com/YueChan/Live/refs/heads/main/APTV.m3u	# YueChan
+ https://raw.githubusercontent.com/BurningC4/Chinese-IPTV/master/TV-IPV4.m3u	# BurningC4
+ https://raw.githubusercontent.com/Ftindy/IPTV-URL/main/bestv.m3u # 百视通源
+ https://raw.githubusercontent.com/vamoschuck/TV/main/M3U # 茶客源
+ https://raw.githubusercontent.com/Ftindy/IPTV-URL/main/cqyx.m3u # 重庆广电源
+ https://raw.githubusercontent.com/Ftindy/IPTV-URL/main/yqgd.m3u # 阳泉广电源
+ https://raw.githubusercontent.com/Ftindy/IPTV-URL/main/IPTV.m3u # 国内4K/8K源
+ https://raw.githubusercontent.com/Ftindy/IPTV-URL/main/hbgd.m3u # 河北广电源
+ https://raw.githubusercontent.com/Ftindy/IPTV-URL/main/msp.m3u
+      `;
+      
+      // 解析纯IPv6源
+      const ipv6SourceData = `
+ https://live.zbds.top/tv/iptv6.txt # 直播源 IPTV6
+ https://live.zbds.top/tv/iptv6.m3u # M3U 格式直播源
+ https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u # 范明明直播源
+ https://live.fanmingming.cn/tv/m3u/ipv6.m3u # 范明明国内源
+ https://raw.githubusercontent.com/YueChan/Live/main/IPTV.m3u # YueChan 直播源
+ https://raw.githubusercontent.com/whpsky/iptv/main/chinatv.m3u # whpsky 源
+ https://gitee.com/xxy002/zhiboyuan/raw/master/dsy # 央卫港澳台
+      `;
+      
+      // 解析混合IP源
+      const mixedSourceData = `
+ https://raw.githubusercontent.com/kimwang1978/collect-tv-txt/main/merged_output.m3u # TV直播源
+ https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u # Kimentanm源
+ https://raw.githubusercontent.com/BigBigGrandG/IPTV-URL/release/Gather.m3u # BigBigGrandG源
+ https://raw.githubusercontent.com/YanG-1989/m3u/main/Gather.m3u # YanG集合源
+ https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/v6.m3u # 范明明直播源
+      `;
+      
+      // 解析海外源
+      const overseasSourceData = `
+ https://epg.pw/test_channels.m3u # 中国频道
+ https://epg.pw/test_channels_hong_kong.m3u # 香港频道
+ https://epg.pw/test_channels_macau.m3u # 澳门频道
+ https://epg.pw/test_channels_taiwan.m3u # 台湾频道
+ https://iptv-org.github.io/iptv/countries/tw.m3u # 台湾频道
+ https://epg.pw/test_channels_singapore.m3u # 新加坡频道
+ https://epg.pw/test_channels_malaysia.m3u # 马来西亚频道
+ https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8 # 世界频道
+ https://iptv-org.github.io/iptv/index.m3u # 世界频道
+      `;
+      
+      // 解析其他直播源
+      const otherSourceData = `
+ http://emby.free.coms.su/diyp/live.php # 斗鱼影厅
+ https://live.freetv.top/huyayqk.m3u # 虎牙一起看
+ https://live.freetv.top/douyuyqk.m3u # 斗鱼一起看
+ https://www.goodiptv.club/yylunbo.m3u?url=https://lunbo.freetv.top # YY轮播
+ https://www.goodiptv.club/bililive.m3u # 哔哩哔哩直播源
+ https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/ya.m3u # 虎牙直播源
+ https://raw.githubusercontent.com/YanG-1989/m3u/main/yu.m3u # 斗鱼直播源
+      `;
+
+      // 解析单仓接口源
+      const singleWarehouseData = `
+ http://www.饭太硬.com/tv	# 饭太硬接口
+ http://我不是.摸鱼儿.com			# 摸鱼儿接口
+ http://肥猫.com				# 肥猫接口
+ http://fty.xxooo.cf/tv			# 神秘哥哥们备用接口
+ https://毒盒.com/tv/	# 毒盒
+ https://www.yingm.cc/dm/dm.json  	# 动漫城接口
+ http://home.jundie.top:81/top98.json	# 俊佬接口
+ https://cdn.gitmirror.com/bb/xduo/libs/master/index.json 	# 道长接口
+ https://cnb.cool/fish2018/pg/-/git/raw/master/jsm.json			# PG接口
+ http://mzjk.top/禁止贩卖			# 宝盒接口
+ http://tvbox.王二小放牛娃.top		# 王小二放牛娃接口
+ https://raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json		# 南风接口
+ https://tv.菜妮丝.top			# 菜妮丝接口
+ https://weixine.net/ysc.json			# 运输车
+ https://api.hgyx.vip/hgyx.json		# HG接口
+ https://dxawi.github.io/0/0.json	# dxawi
+ http://www.mitvbox.xyz/小米/DEMO.json		# 小米
+ http://xhztv.top/xhz		# 小盒子单仓
+ http://xhztv.top/4k.json		# 小盒子4K
+ https://raw.githubusercontent.com/PizazzGY/TVBox/main/api.json		# 潇洒接口
+ https://raw.githubusercontent.com/xyq254245/xyqonlinerule/main/XYQTVBox.json	# 香雅情
+ https://bitbucket.org/xduo/duoapi/raw/master/xpg.json		# 小苹果接口
+ https://raw.githubusercontent.com/FongMi/CatVodSpider/main/json/demo.json		# 蜂蜜接口
+ http://ok321.top/tv		# OK影视内部接口
+ http://ok321.top/ok		# OK影视公开接口
+ https://ztha.top/TVBox/thdjk.json		# 挺好分享
+ https://raw.githubusercontent.com/guot55/YGBH/main/vip2.json		# 宝盒VIP
+ http://tv.nxog.top/m/111.php?ou=公众号欧歌app&mz=all&jar=all&b=欧歌  # 欧歌
+ https://git.acwing.com/iduoduo/orange/-/raw/main/config.bin  # 多多
+ https://哪吒.live/	# 哪吒
+ https://www.252035.xyz/z/FongMi.json	# 真心
+ http://www.meowtv.vip/tvbox.json	# 喵影视
+ http://fmys.top/fmys.json	# 驸马
+ https://gitee.com/yiwu369/6758/raw/master/%E9%9D%92%E9%BE%99/1.json	# 青龙
+ https://fmbox.cc/	# 星辰
+ https://raw.githubusercontent.com/maoystv/6/main/000.json	# 分享
+      `;
+
+      // 解析多仓接口源
+      const multiWarehouseData = `
+ https://www.iyouhun.com/tv/yh   # 游魂多仓
+ https://www.iyouhun.com/tv/dc   # 游魂多仓
+ http://xhztv.top/dc/   # 小盒子多仓
+ http://xhztv.top/DC.txt  # 小盒子多仓（备）
+ https://bitbucket.org/xduo/cool/raw/main/room.json   # 多多影音
+ https://qixing.myhkw.com/DC.txt   # 七星宝盒
+ http://xmbjm.fh4u.org/dc.txt   # 拾光多仓
+      `;
+      
+      // 处理并存储各类型数据源
+      sources.recommendedSources = parseSourceData(recommendedSourceData, 'recommended');
+      sources.ipv4Sources = parseSourceData(ipv4SourceData, 'ipv4');
+      sources.ipv6Sources = parseSourceData(ipv6SourceData, 'ipv6');
+      sources.mixedSources = parseSourceData(mixedSourceData, 'mixed');
+      sources.overseasSources = parseSourceData(overseasSourceData, 'overseas');
+      sources.otherSources = parseSourceData(otherSourceData, 'other');
+      sources.singleWarehouseSources = parseSourceData(singleWarehouseData, 'single-warehouse');
+      sources.multiWarehouseSources = parseSourceData(multiWarehouseData, 'multi-warehouse');
+    };
+    
+    // 解析源数据字符串，转换为对象数组
+    const parseSourceData = (data, type) => {
+      const sources = [];
+      // 按行分割数据
+      const lines = data.trim().split('\n');
+      
+      lines.forEach((line, index) => {
+        // 清理行首尾空格
+        line = line.trim();
+        if (!line) return;
+        
+        // 分割链接和名称（#号分隔）
+        const parts = line.split('#');
+        if (parts.length < 2) return;
+        
+        const url = parts[0].trim();
+        const name = parts[1].trim();
+        
+        // 创建源对象
+        sources.push({
+          id: `${type}-${(index + 1).toString().padStart(2, '0')}`,
+          title: name,
+          description: `${name}，点击卡片可复制链接`,
+          url: url,
+          status: null,
+          testDetails: '',
+          icon: getIconForSource(name, type)
+        });
+      });
+      
+      return sources;
+    };
+    
+    // 根据源名称和类型获取合适的图标
+    const getIconForSource = (name, type) => {
+      // 按类型设置基础图标
+      const typeIcons = {
+        'recommended': 'fa-star',
+        'ipv4': 'fa-wifi',
+        'ipv6': 'fa-wifi',
+        'mixed': 'fa-exchange',
+        'overseas': 'fa-globe',
+        'other': 'fa-television',
+        'single-warehouse': 'fa-cube',
+        'multi-warehouse': 'fa-cubes'
+      };
+      
+      // 特定名称的图标映射
+      const nameIcons = {
+        '小马影视': 'fa-film',
+        'IPTV': 'fa-television',
+        '潇洒AI': 'fa-robot',
+        '范明明': 'fa-user',
+        '百视通': 'fa-play-circle',
+        '斗鱼': 'fa-gamepad',
+        '虎牙': 'fa-gamepad',
+        '哔哩哔哩': 'fa-play-circle',
+        '香港': 'fa-flag',
+        '台湾': 'fa-flag',
+        '澳门': 'fa-flag',
+        '新加坡': 'fa-flag',
+        '马来西亚': 'fa-flag',
+        '动漫城': 'fa-film',
+        '青龙': 'fa-dragon',
+        '哪吒': 'fa-fire',
+        '星辰': 'fa-star',
+        '蜂蜜': 'fa-honey-pot',
+        '喵影视': 'fa-cat'
+      };
+      
+      // 优先匹配特定名称图标
+      for (const [keyword, icon] of Object.entries(nameIcons)) {
+        if (name.includes(keyword)) {
+          return icon;
+        }
+      }
+      
+      // 否则使用类型图标
+      return typeIcons[type] || 'fa-television';
+    };
+    
+    // 生成卡片HTML
+    const createSourceCard = (source) => {
+      const card = document.createElement('div');
+      card.className = 'card-gradient rounded-xl p-5 shadow-card hover:shadow-card-hover transition-all duration-300 transform hover:-translate-y-1 cursor-pointer overflow-hidden group card-collapsed';
+      card.dataset.id = source.id;
+      card.dataset.url = source.url;
+      
+      // 状态指示器
+      let statusHtml = '<div class="status-indicator w-2 h-2 rounded-full bg-gray-500"></div>';
+      let statusText = '<span class="status-text text-gray-400 text-xs">未测试</span>';
+      
+      if (source.status === true) {
+        statusHtml = '<div class="status-indicator w-2 h-2 rounded-full bg-success"></div>';
+        statusText = '<span class="status-text text-success text-xs">正常</span>';
+      } else if (source.status === false) {
+        statusHtml = '<div class="status-indicator w-2 h-2 rounded-full bg-danger"></div>';
+        statusText = '<span class="status-text text-danger text-xs">异常</span>';
+      } else if (source.status === 'testing-ping') {
+        statusHtml = '<div class="status-indicator w-2 h-2 rounded-full bg-pending animate-pulse"></div>';
+        statusText = '<span class="status-text text-pending text-xs">测试中...</span>';
+      }
+      
+      // 测试详情
+      let testDetailsHtml = '';
+      if (source.testDetails) {
+        testDetailsHtml = `<div class="test-details">${source.testDetails}</div>`;
+      }
+      
+      // 卡片内容
+      card.innerHTML = `
+        <div class="flex justify-between items-start mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+              <i class="fa ${source.icon}"></i>
+            </div>
+            <h3 class="font-semibold text-lg">${source.title}</h3>
+          </div>
+          <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            ${statusHtml}
+            ${statusText}
+          </div>
+        </div>
+        
+        <!-- 折叠内容 -->
+        <div class="collapsible-content collapsed-hidden">
+          <p class="text-gray-400 text-sm mb-4">${source.description}</p>
+          <div class="mt-auto pt-2 border-t border-gray-700/50 flex justify-between items-center">
+            <span class="text-xs text-gray-500 truncate w-[70%]">${source.url}</span>
+            <button class="copy-btn text-primary hover:text-primary/80 transition-colors">
+              <i class="fa fa-copy"></i>
+            </button>
+          </div>
+          ${testDetailsHtml}
+          <div class="mt-3 text-center">
+            <button class="toggle-card-btn text-xs text-secondary hover:text-secondary/80 transition-colors">
+              <i class="fa fa-angle-up"></i> 收起
+            </button>
+          </div>
+        </div>
+        
+        <!-- 展开按钮 -->
+        <div class="expand-button expanded-hidden mt-2 text-center">
+          <button class="toggle-card-btn text-xs text-secondary hover:text-secondary/80 transition-colors">
+            <i class="fa fa-angle-down"></i> 展开
+          </button>
+        </div>
+        
+        <div class="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      `;
+      
+      // 获取按钮元素并绑定事件
+      setupCardEvents(card, source);
+      
+      return card;
+    };
+    
+    // 设置卡片事件处理
+    const setupCardEvents = (card, source) => {
+      const copyBtn = card.querySelector('.copy-btn');
+      const toggleButtons = card.querySelectorAll('.toggle-card-btn');
+      
+      // 复制按钮事件
+      if (copyBtn) {
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          copyToClipboard(source.url, card);
+        });
+      }
+      
+      // 展开/收起按钮事件
+      toggleButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleCard(card);
+        });
+      });
+      
+      // 卡片点击事件 - 复制链接
+      card.addEventListener('click', () => {
+        copyToClipboard(source.url, card);
+      });
+    };
+    
+    // 切换单个卡片的展开/收起状态
+    const toggleCard = (card) => {
+      const isCollapsed = card.classList.contains('card-collapsed');
+      const content = card.querySelector('.collapsible-content');
+      const expandBtn = card.querySelector('.expand-button');
+      const toggleBtns = card.querySelectorAll('.toggle-card-btn');
+      
+      if (isCollapsed) {
+        card.classList.remove('card-collapsed');
+        card.classList.add('card-expanded');
+        content.classList.remove('collapsed-hidden');
+        content.classList.add('expanded-visible');
+        expandBtn.classList.remove('expanded-visible');
+        expandBtn.classList.add('collapsed-hidden');
+        
+        toggleBtns.forEach(btn => {
+          btn.innerHTML = '<i class="fa fa-angle-up"></i> 收起';
+        });
+      } else {
+        card.classList.remove('card-expanded');
+        card.classList.add('card-collapsed');
+        content.classList.remove('expanded-visible');
+        content.classList.add('collapsed-hidden');
+        expandBtn.classList.remove('collapsed-hidden');
+        expandBtn.classList.add('expanded-visible');
+        
+        toggleBtns.forEach(btn => {
+          btn.innerHTML = '<i class="fa fa-angle-down"></i> 展开';
+        });
+      }
+    };
+    
+    // 切换所有卡片的展开/收起状态
+    const toggleAllCards = (expand) => {
+      const allCards = document.querySelectorAll('.card-gradient');
+      const toggleBtn = document.getElementById('toggleAllBtn');
+      
+      allCards.forEach(card => {
+        const isCollapsed = card.classList.contains('card-collapsed');
+        const content = card.querySelector('.collapsible-content');
+        const expandBtn = card.querySelector('.expand-button');
+        const toggleBtns = card.querySelectorAll('.toggle-card-btn');
+        
+        if (expand && isCollapsed) {
+          card.classList.remove('card-collapsed');
+          card.classList.add('card-expanded');
+          content.classList.remove('collapsed-hidden');
+          content.classList.add('expanded-visible');
+          expandBtn.classList.remove('expanded-visible');
+          expandBtn.classList.add('collapsed-hidden');
+          
+          toggleBtns.forEach(btn => {
+            btn.innerHTML = '<i class="fa fa-angle-up"></i> 收起';
+          });
+        } else if (!expand && !isCollapsed) {
+          card.classList.remove('card-expanded');
+          card.classList.add('card-collapsed');
+          content.classList.remove('expanded-visible');
+          content.classList.add('collapsed-hidden');
+          expandBtn.classList.remove('collapsed-hidden');
+          expandBtn.classList.add('expanded-visible');
+          
+          toggleBtns.forEach(btn => {
+            btn.innerHTML = '<i class="fa fa-angle-down"></i> 展开';
+          });
+        }
+      });
+      
+      if (expand) {
+        toggleBtn.innerHTML = '<i class="fa fa-minus-square"></i><span>收起全部</span>';
+        toggleBtn.dataset.state = 'expanded';
+        showStatusMessage('已展开全部内容', 'success');
+      } else {
+        toggleBtn.innerHTML = '<i class="fa fa-plus-square"></i><span>展开全部</span>';
+        toggleBtn.dataset.state = 'collapsed';
+        showStatusMessage('已收起全部内容', 'success');
+      }
+    };
+    
+    // 复制到剪贴板功能
+    const copyToClipboard = (text, element) => {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+          showCopySuccess();
+          highlightCard(element);
+        }).catch(err => {
+          console.error('Clipboard API 失败: ', err);
+          fallbackCopyText(text, element);
+        });
+      } else {
+        fallbackCopyText(text, element);
+      }
+    };
+    
+    // 复制成功提示
+    const showCopySuccess = () => {
+      const successToast = document.getElementById('copyToast');
+      const errorToast = document.getElementById('copyErrorToast');
+      
+      errorToast.classList.remove('translate-y-0', 'opacity-100');
+      errorToast.classList.add('translate-y-20', 'opacity-0');
+      
+      successToast.classList.remove('translate-y-20', 'opacity-0');
+      successToast.classList.add('translate-y-0', 'opacity-100');
+      
+      setTimeout(() => {
+        successToast.classList.remove('translate-y-0', 'opacity-100');
+        successToast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    };
+    
+    // 复制失败提示
+    const showCopyError = () => {
+      const successToast = document.getElementById('copyToast');
+      const errorToast = document.getElementById('copyErrorToast');
+      
+      successToast.classList.remove('translate-y-0', 'opacity-100');
+      successToast.classList.add('translate-y-20', 'opacity-0');
+      
+      errorToast.classList.remove('translate-y-20', 'opacity-0');
+      errorToast.classList.add('translate-y-0', 'opacity-100');
+      
+      setTimeout(() => {
+        errorToast.classList.remove('translate-y-0', 'opacity-100');
+        errorToast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    };
+    
+    // 卡片高亮动画
+    const highlightCard = (card) => {
+      card.classList.add('ring-2', 'ring-success');
+      setTimeout(() => {
+        card.classList.remove('ring-2', 'ring-success');
+      }, 1000);
+    };
+    
+    // 复制文本的 fallback 方法
+    const fallbackCopyText = (text, element) => {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'absolute';
+      textArea.style.left = '-9999px';
+      
+      document.body.appendChild(textArea);
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          showCopySuccess();
+          highlightCard(element);
+        } else {
+          showCopyError();
+        }
+      } catch (err) {
+        console.error('Fallback 复制失败: ', err);
+        showCopyError();
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    };
+    
+    // 测试链接有效性
+    const testLinkValidity = async (url) => {
+      try {
+        // 尝试创建一个小型请求来测试链接是否有效
+        const controller = new AbortController();
+        // 设置超时时间为10秒
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        // 对于不同类型的链接使用不同的测试方法
+        if (url.endsWith('.txt') || url.endsWith('.m3u') || url.endsWith('.m3u8') || url.includes('.php') || url.endsWith('.json') || url.endsWith('.bin')) {
+          // 直播源文件 - 尝试获取头部信息
+          const response = await fetch(url, {
+            method: 'HEAD',
+            mode: 'cors',
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          return {
+            success: response.ok,
+            status: response.status,
+            statusText: response.statusText,
+            details: `HTTP状态: ${response.status} ${response.statusText}`
+          };
+        } else {
+          // 其他类型链接 - 尝试完整请求
+          const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          return {
+            success: response.ok,
+            status: response.status,
+            statusText: response.statusText,
+            details: `HTTP状态: ${response.status} ${response.statusText}`
+          };
+        }
+      } catch (error) {
+        let errorDetails = '';
+        if (error.name === 'AbortError') {
+          errorDetails = '请求超时（超过10秒）';
+        } else if (error.name === 'TypeError') {
+          errorDetails = 'URL格式无效';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorDetails = '无法连接到服务器';
+        } else {
+          errorDetails = error.message;
+        }
+        
+        return {
+          success: false,
+          status: 0,
+          statusText: '错误',
+          details: `测试失败: ${errorDetails}`
+        };
+      }
+    };
+    
+    // 测试所有链接
+    const testAllSources = async () => {
+      // 收集所有类型的源
+      const allSources = [
+        ...sources.recommendedSources,
+        ...sources.ipv4Sources,
+        ...sources.ipv6Sources,
+        ...sources.mixedSources,
+        ...sources.overseasSources,
+        ...sources.otherSources,
+        ...sources.singleWarehouseSources,
+        ...sources.multiWarehouseSources
+      ];
+      
+      const total = allSources.length;
+      let completed = 0;
+      let successCount = 0;
+      
+      showStatusMessage('正在测试所有链接，请稍候...', 'info');
+      
+      const testBtn = document.getElementById('testAllBtn');
+      testBtn.disabled = true;
+      testBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i><span>测试中...</span>';
+      
+      for (const source of allSources) {
+        try {
+          source.status = 'testing-ping';
+          updateSourceStatus(source.id, 'testing-ping');
+          
+          const result = await testLinkValidity(source.url);
+          
+          // 更新后台数据
+          source.status = result.success;
+          source.testDetails = result.details;
+          updateSourceStatus(source.id, result.success, result.details);
+          
+          if (result.success) {
+            successCount++;
+          }
+        } catch (error) {
+          source.status = false;
+          source.testDetails = `测试出错: ${error.message}`;
+          updateSourceStatus(source.id, false, source.testDetails);
+        }
+        
+        completed++;
+        showStatusMessage(`正在测试所有链接 (${completed}/${total})...`, 'info');
+      }
+      
+      showStatusMessage(`测试完成: 共 ${total} 个链接，其中 ${successCount} 个正常，${total - successCount} 个异常`, 
+        successCount === total ? 'success' : (successCount > 0 ? 'warning' : 'error'));
+      
+      testBtn.disabled = false;
+      testBtn.innerHTML = '<i class="fa fa-check-circle"></i><span>测试所有链接</span>';
+    };
+    
+    // 更新单个源的状态显示
+    const updateSourceStatus = (sourceId, status, details = '') => {
+      const card = document.querySelector(`[data-id="${sourceId}"]`);
+      if (!card) return;
+      
+      const indicator = card.querySelector('.status-indicator');
+      const statusText = card.querySelector('.status-text');
+      let testDetailsEl = card.querySelector('.test-details');
+      
+      // 更新测试详情
+      if (details && !testDetailsEl) {
+        const content = card.querySelector('.collapsible-content');
+        const separator = content.querySelector('.border-t');
+        testDetailsEl = document.createElement('div');
+        testDetailsEl.className = 'test-details';
+        separator.after(testDetailsEl);
+      }
+      
+      if (testDetailsEl) {
+        testDetailsEl.textContent = details;
+      }
+      
+      // 更新状态显示
+      if (status === 'testing-ping') {
+        indicator.className = 'status-indicator w-2 h-2 rounded-full bg-pending animate-pulse';
+        statusText.className = 'status-text text-pending text-xs';
+        statusText.textContent = '测试中...';
+      } else if (status === true) {
+        indicator.className = 'status-indicator w-2 h-2 rounded-full bg-success';
+        statusText.className = 'status-text text-success text-xs';
+        statusText.textContent = '正常';
+      } else {
+        indicator.className = 'status-indicator w-2 h-2 rounded-full bg-danger';
+        statusText.className = 'status-text text-danger text-xs';
+        statusText.textContent = '异常';
+      }
+      
+      indicator.parentElement.classList.remove('opacity-0');
+      indicator.parentElement.classList.add('opacity-100');
+    };
+    
+    // 显示状态消息
+    const showStatusMessage = (text, type = 'info') => {
+      const statusEl = document.getElementById('statusMessage');
+      statusEl.textContent = '';
+      statusEl.classList.remove('hidden', 'bg-success/20', 'bg-danger/20', 'bg-warning/20', 'bg-primary/20', 'text-success', 'text-danger', 'text-warning', 'text-primary', 'text-pending', 'bg-pending/20');
+      
+      let icon, bgClass, textClass;
+      
+      switch (type) {
+        case 'success':
+          icon = 'fa-check-circle';
+          bgClass = 'bg-success/20';
+          textClass = 'text-success';
+          break;
+        case 'error':
+          icon = 'fa-exclamation-circle';
+          bgClass = 'bg-danger/20';
+          textClass = 'text-danger';
+          break;
+        case 'warning':
+          icon = 'fa-exclamation-triangle';
+          bgClass = 'bg-warning/20';
+          textClass = 'text-warning';
+          break;
+        case 'pending':
+          icon = 'fa-clock-o';
+          bgClass = 'bg-pending/20';
+          textClass = 'text-pending';
+          break;
+        default:
+          icon = 'fa-info-circle';
+          bgClass = 'bg-primary/20';
+          textClass = 'text-primary';
+      }
+      
+      statusEl.classList.add('flex', bgClass, textClass);
+      statusEl.innerHTML = `<i class="fa ${icon}"></i><span>${text}</span>`;
+    };
+    
+    // 初始化页面 - 从后台加载数据
+    document.addEventListener('DOMContentLoaded', () => {
+      // 初始化后台数据源
+      initBackendSources();
+      
+      // 渲染各类型直播源
+      renderSources('recommendedSources', 'recommendedSourcesContainer', 'recommendedSourceCount');
+      renderSources('ipv4Sources', 'ipv4SourcesContainer', 'ipv4SourceCount');
+      renderSources('ipv6Sources', 'ipv6SourcesContainer', 'ipv6SourceCount');
+      renderSources('mixedSources', 'mixedSourcesContainer', 'mixedSourceCount');
+      renderSources('overseasSources', 'overseasSourcesContainer', 'overseasSourceCount');
+      renderSources('otherSources', 'otherSourcesContainer', 'otherSourceCount');
+      renderSources('singleWarehouseSources', 'singleWarehouseContainer', 'singleWarehouseCount');
+      renderSources('multiWarehouseSources', 'multiWarehouseContainer', 'multiWarehouseCount');
+      
+      // 测试所有按钮事件
+      document.getElementById('testAllBtn').addEventListener('click', testAllSources);
+      
+      // 展开/收起全部按钮事件
+      const toggleBtn = document.getElementById('toggleAllBtn');
+      toggleBtn.dataset.state = 'collapsed';
+      
+      toggleBtn.addEventListener('click', () => {
+        const currentState = toggleBtn.dataset.state;
+        if (currentState === 'collapsed') {
+          toggleAllCards(true);
+        } else {
+          toggleAllCards(false);
+        }
+      });
+    });
+    
+    // 渲染特定类型的源
+    const renderSources = (sourceKey, containerId, countId) => {
+      const container = document.getElementById(containerId);
+      const countElement = document.getElementById(countId);
+      
+      sources[sourceKey].forEach(source => {
+        const card = createSourceCard(source);
+        container.appendChild(card);
+      });
+      
+      // 更新计数
+      countElement.textContent = `${sources[sourceKey].length} 个源`;
+    };
+  </script>
+</body>
+</html>
