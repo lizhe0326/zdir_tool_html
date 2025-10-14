@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker 命令与 Compose 转换工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36BFFA',
+                        dark: '#1D2939',
+                        light: '#F9FAFB',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        danger: '#F53F3F',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 20px rgba(0, 0, 0, 0.08)',
+                        'hover': '0 8px 30px rgba(0, 0, 0, 0.12)',
+                    }
+                },
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .transition-all-300 {
+                transition: all 300ms ease-in-out;
+            }
+            .editor-height {
+                min-height: 300px;
+                max-height: 600px;
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-50 text-dark min-h-screen flex flex-col">
+    <!-- 顶部导航 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-cubes text-primary text-2xl"></i>
+                <h1 class="text-xl md:text-2xl font-bold text-dark">Docker 转换工具</h1>
+            </div>
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="#" class="text-gray-600 hover:text-primary transition-all-300">
+                    <i class="fa fa-question-circle mr-1"></i>帮助
+                </a>
+                <a href="#" class="text-gray-600 hover:text-primary transition-all-300">
+                    <i class="fa fa-github mr-1"></i>源码
+                </a>
+            </div>
+            <button class="md:hidden text-gray-600" id="mobileMenuBtn">
+                <i class="fa fa-bars text-xl"></i>
+            </button>
+        </div>
+        <!-- 移动端菜单 -->
+        <div id="mobileMenu" class="hidden md:hidden bg-white border-t border-gray-100 px-4 py-2">
+            <a href="#" class="block py-2 text-gray-600 hover:text-primary transition-all-300">
+                <i class="fa fa-question-circle mr-1"></i>帮助
+            </a>
+            <a href="#" class="block py-2 text-gray-600 hover:text-primary transition-all-300">
+                <i class="fa fa-github mr-1"></i>源码
+            </a>
+        </div>
+    </header>
+
+    <!-- 主要内容 -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <!-- 介绍卡片 -->
+        <div class="bg-white rounded-xl shadow-card p-6 mb-8 transition-all-300 hover:shadow-hover">
+            <h2 class="text-xl font-semibold mb-2 flex items-center">
+                <i class="fa fa-info-circle text-primary mr-2"></i>工具介绍
+            </h2>
+            <p class="text-gray-600">
+                这个工具可以帮助您在Docker命令和docker-compose配置之间进行转换。支持单行和多行格式的Docker命令，
+                转换结果会保留大部分常用参数。
+            </p>
+        </div>
+        
+        <!-- 转换区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Docker命令输入区 -->
+            <div class="bg-white rounded-xl shadow-card p-6 transition-all-300 hover:shadow-hover">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <i class="fa fa-terminal text-primary mr-2"></i>Docker 命令
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button id="clearDockerCmd" class="text-gray-500 hover:text-danger p-1 transition-all-300" title="清空">
+                            <i class="fa fa-trash-o"></i>
+                        </button>
+                        <button id="sampleDockerCmd" class="text-gray-500 hover:text-success p-1 transition-all-300" title="示例命令">
+                            <i class="fa fa-file-text-o"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-2 text-sm text-gray-500">
+                    <i class="fa fa-lightbulb-o mr-1"></i>支持单行或多行格式的Docker命令
+                </div>
+                <textarea id="dockerCommand" 
+                          class="w-full editor-height p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300 font-mono text-sm resize-y"
+                          placeholder="输入Docker命令，例如：
+docker run -d --name mynginx \
+  -p 80:80 \
+  -v /host/path:/container/path \
+  -e ENV_VAR=value \
+  --restart always \
+  nginx:latest"></textarea>
+            </div>
+            
+            <!-- 转换按钮区（仅在移动端显示） -->
+            <div class="lg:hidden flex justify-center">
+                <button id="convertBtnMobile" class="bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-8 rounded-lg shadow-md transition-all-300 flex items-center">
+                    <i class="fa fa-exchange mr-2"></i>
+                    <span>转换</span>
+                </button>
+            </div>
+            
+            <!-- 转换按钮区（仅在桌面端显示） -->
+            <div class="hidden lg:flex items-center justify-center">
+                <button id="convertBtn" class="bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-8 rounded-lg shadow-md transition-all-300 transform hover:scale-105 flex items-center">
+                    <i class="fa fa-exchange mr-2"></i>
+                    <span>转换</span>
+                </button>
+            </div>
+            
+            <!-- Docker Compose输出区 -->
+            <div class="bg-white rounded-xl shadow-card p-6 transition-all-300 hover:shadow-hover">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <i class="fa fa-file-code-o text-primary mr-2"></i>docker-compose.yml
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button id="copyCompose" class="text-gray-500 hover:text-success p-1 transition-all-300" title="复制到剪贴板">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                        <button id="downloadCompose" class="text-gray-500 hover:text-primary p-1 transition-all-300" title="下载文件">
+                            <i class="fa fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-2 text-sm text-gray-500">
+                    <i class="fa fa-check-circle mr-1"></i>转换后的docker-compose配置
+                </div>
+                <pre id="composeOutput" class="w-full editor-height p-4 border border-gray-200 rounded-lg font-mono text-sm overflow-auto bg-gray-50"></pre>
+            </div>
+        </div>
+        
+        <!-- 反向转换区域 -->
+        <div class="mt-12">
+            <h2 class="text-xl font-semibold mb-6 text-center">
+                <i class="fa fa-refresh text-primary mr-2"></i>反向转换：docker-compose 到 Docker 命令
+            </h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Docker Compose输入区 -->
+                <div class="bg-white rounded-xl shadow-card p-6 transition-all-300 hover:shadow-hover">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa fa-file-code-o text-primary mr-2"></i>docker-compose.yml
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button id="clearComposeInput" class="text-gray-500 hover:text-danger p-1 transition-all-300" title="清空">
+                                <i class="fa fa-trash-o"></i>
+                            </button>
+                            <button id="sampleCompose" class="text-gray-500 hover:text-success p-1 transition-all-300" title="示例配置">
+                                <i class="fa fa-file-text-o"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-2 text-sm text-gray-500">
+                        <i class="fa fa-lightbulb-o mr-1"></i>输入docker-compose配置内容
+                    </div>
+                    <textarea id="composeInput" 
+                              class="w-full editor-height p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300 font-mono text-sm resize-y"
+                              placeholder="输入docker-compose配置，例如：
+version: '3'
+services:
+  nginx:
+    image: nginx:latest
+    container_name: mynginx
+    ports:
+      - '80:80'
+    volumes:
+      - /host/path:/container/path
+    environment:
+      - ENV_VAR=value
+    restart: always"></textarea>
+                </div>
+                
+                <!-- 反向转换按钮区（仅在移动端显示） -->
+                <div class="lg:hidden flex justify-center">
+                    <button id="reverseConvertBtnMobile" class="bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-8 rounded-lg shadow-md transition-all-300 flex items-center">
+                        <i class="fa fa-exchange mr-2"></i>
+                        <span>反向转换</span>
+                    </button>
+                </div>
+                
+                <!-- 反向转换按钮区（仅在桌面端显示） -->
+                <div class="hidden lg:flex items-center justify-center">
+                    <button id="reverseConvertBtn" class="bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-8 rounded-lg shadow-md transition-all-300 transform hover:scale-105 flex items-center">
+                        <i class="fa fa-exchange mr-2"></i>
+                        <span>反向转换</span>
+                    </button>
+                </div>
+                
+                <!-- Docker命令输出区 -->
+                <div class="bg-white rounded-xl shadow-card p-6 transition-all-300 hover:shadow-hover">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa fa-terminal text-primary mr-2"></i>Docker 命令
+                        </h2>
+                        <div class="flex space-x-2">
+                            <div class="flex items-center space-x-1">
+                                <span class="text-xs text-gray-500">格式：</span>
+                                <button id="formatSingleLine" class="text-gray-500 hover:text-primary p-1 transition-all-300 text-xs" title="单行格式">单行</button>
+                                <button id="formatMultiLine" class="text-gray-500 hover:text-primary p-1 transition-all-300 text-xs bg-primary/10 text-primary" title="多行格式">多行</button>
+                            </div>
+                            <button id="copyDockerCmd" class="text-gray-500 hover:text-success p-1 transition-all-300" title="复制到剪贴板">
+                                <i class="fa fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-2 text-sm text-gray-500">
+                        <i class="fa fa-check-circle mr-1"></i>转换后的Docker命令
+                    </div>
+                    <pre id="dockerCmdOutput" class="w-full editor-height p-4 border border-gray-200 rounded-lg font-mono text-sm overflow-auto bg-gray-50"></pre>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 功能说明 -->
+        <div class="mt-12 bg-white rounded-xl shadow-card p-6 transition-all-300 hover:shadow-hover">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+                <i class="fa fa-list-alt text-primary mr-2"></i>支持的参数
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-medium text-lg mb-2">Docker命令参数</h3>
+                    <ul class="text-gray-600 space-y-1">
+                        <li><i class="fa fa-check text-success mr-1"></i>--name：容器名称</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>-d/--detach：后台运行</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>-p/--publish：端口映射</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>-v/--volume：卷挂载</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>-e/--env：环境变量</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>--restart：重启策略</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>--network：网络配置</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>--link：链接其他容器</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-medium text-lg mb-2">docker-compose配置项</h3>
+                    <ul class="text-gray-600 space-y-1">
+                        <li><i class="fa fa-check text-success mr-1"></i>image：镜像名称</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>container_name：容器名称</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>ports：端口映射</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>volumes：卷挂载</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>environment：环境变量</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>restart：重启策略</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>networks：网络配置</li>
+                        <li><i class="fa fa-check text-success mr-1"></i>depends_on：依赖关系</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-white border-t border-gray-200 mt-12 py-6">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>© 2023 Docker 命令与 Compose 转换工具 | 一个简单实用的开发辅助工具</p>
+        </div>
+    </footer>
+
+    <!-- 通知提示 -->
+    <div id="notification" class="fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all-300 flex items-center">
+        <i id="notificationIcon" class="mr-2"></i>
+        <span id="notificationText"></span>
+    </div>
+
+    <script>
+        // DOM 元素
+        const dockerCommand = document.getElementById('dockerCommand');
+        const composeOutput = document.getElementById('composeOutput');
+        const composeInput = document.getElementById('composeInput');
+        const dockerCmdOutput = document.getElementById('dockerCmdOutput');
+        const convertBtn = document.getElementById('convertBtn');
+        const convertBtnMobile = document.getElementById('convertBtnMobile');
+        const reverseConvertBtn = document.getElementById('reverseConvertBtn');
+        const reverseConvertBtnMobile = document.getElementById('reverseConvertBtnMobile');
+        const clearDockerCmd = document.getElementById('clearDockerCmd');
+        const clearComposeInput = document.getElementById('clearComposeInput');
+        const copyCompose = document.getElementById('copyCompose');
+        const copyDockerCmd = document.getElementById('copyDockerCmd');
+        const downloadCompose = document.getElementById('downloadCompose');
+        const sampleDockerCmd = document.getElementById('sampleDockerCmd');
+        const sampleCompose = document.getElementById('sampleCompose');
+        const formatSingleLine = document.getElementById('formatSingleLine');
+        const formatMultiLine = document.getElementById('formatMultiLine');
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const notification = document.getElementById('notification');
+        const notificationIcon = document.getElementById('notificationIcon');
+        const notificationText = document.getElementById('notificationText');
+        
+        // 格式设置
+        let outputFormat = 'multi'; // 'single' 或 'multi'
+        
+        // 移动端菜单切换
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+        
+        // 格式切换
+        formatSingleLine.addEventListener('click', () => {
+            outputFormat = 'single';
+            formatSingleLine.classList.add('bg-primary/10', 'text-primary');
+            formatSingleLine.classList.remove('text-gray-500');
+            formatMultiLine.classList.remove('bg-primary/10', 'text-primary');
+            formatMultiLine.classList.add('text-gray-500');
+            
+            // 如果已有输出，重新格式化
+            if (dockerCmdOutput.textContent.trim()) {
+                const currentOutput = dockerCmdOutput.textContent;
+                dockerCmdOutput.textContent = convertToSingleLine(currentOutput);
+            }
+        });
+        
+        formatMultiLine.addEventListener('click', () => {
+            outputFormat = 'multi';
+            formatMultiLine.classList.add('bg-primary/10', 'text-primary');
+            formatMultiLine.classList.remove('text-gray-500');
+            formatSingleLine.classList.remove('bg-primary/10', 'text-primary');
+            formatSingleLine.classList.add('text-gray-500');
+            
+            // 如果已有输出，重新格式化
+            if (dockerCmdOutput.textContent.trim()) {
+                const currentOutput = dockerCmdOutput.textContent;
+                dockerCmdOutput.textContent = convertToMultiLine(currentOutput);
+            }
+        });
+        
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            notificationText.textContent = message;
+            
+            // 设置图标和样式
+            if (type === 'success') {
+                notificationIcon.className = 'fa fa-check-circle text-success';
+                notification.classList.remove('bg-danger/90', 'bg-warning/90', 'text-white');
+                notification.classList.add('bg-success/90', 'text-white');
+            } else if (type === 'error') {
+                notificationIcon.className = 'fa fa-exclamation-circle text-white';
+                notification.classList.remove('bg-success/90', 'bg-warning/90', 'text-white');
+                notification.classList.add('bg-danger/90', 'text-white');
+            } else if (type === 'warning') {
+                notificationIcon.className = 'fa fa-exclamation-triangle text-white';
+                notification.classList.remove('bg-success/90', 'bg-danger/90', 'text-white');
+                notification.classList.add('bg-warning/90', 'text-white');
+            }
+            
+            // 显示通知
+            notification.classList.remove('translate-y-20', 'opacity-0');
+            notification.classList.add('translate-y-0', 'opacity-100');
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                notification.classList.remove('translate-y-0', 'opacity-100');
+                notification.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+        
+        // 创建文本区域用于复制（兼容旧浏览器）
+        function createTempTextArea(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.top = '-1000px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, 99999); // 移动设备兼容
+            return textArea;
+        }
+        
+        // 复制到剪贴板
+        copyCompose.addEventListener('click', () => {
+            const text = composeOutput.textContent;
+            if (!text.trim()) {
+                showNotification('没有可复制的内容', 'warning');
+                return;
+            }
+            
+            try {
+                // 尝试使用Clipboard API
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('已复制到剪贴板');
+                }).catch(() => {
+                    // 失败时使用传统方法
+                    const textArea = createTempTextArea(text);
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showNotification('已复制到剪贴板');
+                });
+            } catch (err) {
+                // 完全失败的情况
+                showNotification('复制失败: ' + err.message, 'error');
+            }
+        });
+        
+        copyDockerCmd.addEventListener('click', () => {
+            const text = dockerCmdOutput.textContent;
+            if (!text.trim()) {
+                showNotification('没有可复制的内容', 'warning');
+                return;
+            }
+            
+            try {
+                // 尝试使用Clipboard API
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('已复制到剪贴板');
+                }).catch(() => {
+                    // 失败时使用传统方法
+                    const textArea = createTempTextArea(text);
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showNotification('已复制到剪贴板');
+                });
+            } catch (err) {
+                // 完全失败的情况
+                showNotification('复制失败: ' + err.message, 'error');
+            }
+        });
+        
+        // 下载文件
+        downloadCompose.addEventListener('click', () => {
+            const text = composeOutput.textContent;
+            if (!text.trim()) {
+                showNotification('没有可下载的内容', 'warning');
+                return;
+            }
+            
+            const blob = new Blob([text], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'docker-compose.yml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showNotification('文件已下载');
+        });
+        
+        // 清空输入
+        clearDockerCmd.addEventListener('click', () => {
+            dockerCommand.value = '';
+            updateConvertButtonColor();
+            showNotification('已清空Docker命令输入');
+        });
+        
+        clearComposeInput.addEventListener('click', () => {
+            composeInput.value = '';
+            updateReverseConvertButtonColor();
+            showNotification('已清空docker-compose输入');
+        });
+        
+        // 示例数据
+        sampleDockerCmd.addEventListener('click', () => {
+            dockerCommand.value = `docker run -d --name mynginx \
+  -p 80:80 \
+  -p 443:443 \
+  -v /host/nginx/conf:/etc/nginx/conf.d \
+  -v /host/nginx/html:/usr/share/nginx/html \
+  -e TZ=Asia/Shanghai \
+  -e ENV=production \
+  --restart always \
+  --network mynetwork \
+  nginx:latest`;
+            updateConvertButtonColor();
+            showNotification('已加载示例Docker命令');
+        });
+        
+        sampleCompose.addEventListener('click', () => {
+            composeInput.value = `version: '3'
+services:
+  nginx:
+    image: nginx:latest
+    container_name: mynginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /host/nginx/conf:/etc/nginx/conf.d
+      - /host/nginx/html:/usr/share/nginx/html
+    environment:
+      - TZ=Asia/Shanghai
+      - ENV=production
+    restart: always
+    networks:
+      - mynetwork
+    depends_on:
+      - app
+
+  app:
+    image: myapp:latest
+    container_name: myapp
+    restart: always
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
+    driver: bridge`;
+            updateReverseConvertButtonColor();
+            showNotification('已加载示例docker-compose配置');
+        });
+        
+        // 更新转换按钮颜色
+        function updateConvertButtonColor() {
+            const hasContent = dockerCommand.value.trim() !== '';
+            
+            if (hasContent) {
+                convertBtn.classList.remove('bg-secondary', 'hover:bg-secondary/90');
+                convertBtn.classList.add('bg-primary', 'hover:bg-primary/90');
+                convertBtnMobile.classList.remove('bg-secondary', 'hover:bg-secondary/90');
+                convertBtnMobile.classList.add('bg-primary', 'hover:bg-primary/90');
+            } else {
+                convertBtn.classList.remove('bg-primary', 'hover:bg-primary/90');
+                convertBtn.classList.add('bg-secondary', 'hover:bg-secondary/90');
+                convertBtnMobile.classList.remove('bg-primary', 'hover:bg-primary/90');
+                convertBtnMobile.classList.add('bg-secondary', 'hover:bg-secondary/90');
+            }
+        }
+        
+        // 更新反向转换按钮颜色
+        function updateReverseConvertButtonColor() {
+            const hasContent = composeInput.value.trim() !== '';
+            
+            if (hasContent) {
+                reverseConvertBtn.classList.remove('bg-secondary', 'hover:bg-secondary/90');
+                reverseConvertBtn.classList.add('bg-primary', 'hover:bg-primary/90');
+                reverseConvertBtnMobile.classList.remove('bg-secondary', 'hover:bg-secondary/90');
+                reverseConvertBtnMobile.classList.add('bg-primary', 'hover:bg-primary/90');
+            } else {
+                reverseConvertBtn.classList.remove('bg-primary', 'hover:bg-primary/90');
+                reverseConvertBtn.classList.add('bg-secondary', 'hover:bg-secondary/90');
+                reverseConvertBtnMobile.classList.remove('bg-primary', 'hover:bg-primary/90');
+                reverseConvertBtnMobile.classList.add('bg-secondary', 'hover:bg-secondary/90');
+            }
+        }
+        
+        // 监听输入变化，更新按钮颜色
+        dockerCommand.addEventListener('input', updateConvertButtonColor);
+        composeInput.addEventListener('input', updateReverseConvertButtonColor);
+        
+        // 转换Docker命令到docker-compose - 增强版
+        function convertDockerToCompose(cmd) {
+            try {
+                // 1. 预处理命令：移除多余空格和反斜杠，保留引号内容
+                let cleanedCmd = cmd.replace(/\\/g, ' ')
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+                
+                // 检查是否是docker run命令
+                if (!cleanedCmd.startsWith('docker run')) {
+                    throw new Error('请输入有效的docker run命令');
+                }
+                
+                // 2. 解析命令参数（处理带引号的参数）
+                const tokens = tokenizeCommand(cleanedCmd);
+                
+                // 3. 提取参数
+                const params = {
+                    image: '',
+                    name: '',
+                    detach: false,
+                    ports: [],
+                    volumes: [],
+                    environment: [],
+                    restart: 'no', // 默认值
+                    network: '',
+                    links: [],
+                    command: []
+                };
+                
+                // 遍历tokens提取参数
+                let i = 0;
+                while (i < tokens.length) {
+                    const token = tokens[i];
+                    
+                    // 跳过"docker"和"run"
+                    if (token === 'docker' || token === 'run') {
+                        i++;
+                        continue;
+                    }
+                    
+                    // 处理参数
+                    switch (token) {
+                        case '-d':
+                        case '--detach':
+                            params.detach = true;
+                            i++;
+                            break;
+                            
+                        case '--name':
+                            if (i + 1 < tokens.length) {
+                                params.name = tokens[i + 1];
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        case '-p':
+                        case '--publish':
+                            if (i + 1 < tokens.length) {
+                                params.ports.push(tokens[i + 1]);
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        case '-v':
+                        case '--volume':
+                            if (i + 1 < tokens.length) {
+                                params.volumes.push(tokens[i + 1]);
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        case '-e':
+                        case '--env':
+                            if (i + 1 < tokens.length) {
+                                params.environment.push(tokens[i + 1]);
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        case '--restart':
+                            if (i + 1 < tokens.length) {
+                                params.restart = tokens[i + 1];
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        case '--network':
+                            if (i + 1 < tokens.length) {
+                                params.network = tokens[i + 1];
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        case '--link':
+                            if (i + 1 < tokens.length) {
+                                params.links.push(tokens[i + 1]);
+                                i += 2;
+                            } else {
+                                i++;
+                            }
+                            break;
+                            
+                        default:
+                            // 镜像名称是第一个非参数token
+                            if (!params.image) {
+                                params.image = token;
+                                i++;
+                            } else {
+                                // 镜像名称后的所有内容都是command
+                                params.command.push(token);
+                                i++;
+                            }
+                    }
+                }
+                
+                // 验证是否找到镜像名称
+                if (!params.image) {
+                    throw new Error('未找到镜像名称，请检查命令格式');
+                }
+                
+                // 4. 生成docker-compose配置
+                let serviceName = params.name || 'service';
+                // 处理服务名称中的特殊字符
+                serviceName = serviceName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+                
+                let compose = `version: '3'
+services:
+  ${serviceName}:
+    image: ${params.image}`;
+    
+                // 添加容器名称
+                if (params.name) {
+                    compose += `
+    container_name: ${params.name}`;
+                }
+                
+                // 添加端口映射
+                if (params.ports.length > 0) {
+                    compose += `
+    ports:`;
+                    params.ports.forEach(port => {
+                        // 为包含特殊字符的端口映射添加引号
+                        const needsQuotes = /[\s:"]/.test(port);
+                        compose += needsQuotes 
+                            ? `\n      - "${port}"` 
+                            : `\n      - ${port}`;
+                    });
+                }
+                
+                // 添加卷挂载
+                if (params.volumes.length > 0) {
+                    compose += `
+    volumes:`;
+                    params.volumes.forEach(volume => {
+                        const needsQuotes = /[\s:"]/.test(volume);
+                        compose += needsQuotes 
+                            ? `\n      - "${volume}"` 
+                            : `\n      - ${volume}`;
+                    });
+                }
+                
+                // 添加环境变量
+                if (params.environment.length > 0) {
+                    compose += `
+    environment:`;
+                    params.environment.forEach(env => {
+                        const needsQuotes = /[\s="]/.test(env) || env.includes('$');
+                        compose += needsQuotes 
+                            ? `\n      - "${env.replace(/"/g, '\\"')}"` 
+                            : `\n      - ${env}`;
+                    });
+                }
+                
+                // 添加重启策略（非默认值时）
+                if (params.restart && params.restart !== 'no') {
+                    compose += `
+    restart: ${params.restart}`;
+                }
+                
+                // 添加网络配置
+                if (params.network) {
+                    compose += `
+    networks:
+      - ${params.network}`;
+                    
+                    // 添加网络定义
+                    compose += `
+networks:
+  ${params.network}:
+    driver: bridge`;
+                }
+                
+                // 添加链接
+                if (params.links.length > 0) {
+                    compose += `
+    links:`;
+                    params.links.forEach(link => {
+                        compose += `\n      - "${link}"`;
+                    });
+                }
+                
+                // 添加命令
+                if (params.command.length > 0) {
+                    const commandStr = params.command.join(' ');
+                    const needsQuotes = /[\s"]/.test(commandStr);
+                    compose += needsQuotes
+                        ? `\n    command: "${commandStr.replace(/"/g, '\\"')}"`
+                        : `\n    command: ${commandStr}`;
+                }
+                
+                return compose;
+            } catch (error) {
+                showNotification(`转换失败: ${error.message}`, 'error');
+                return '';
+            }
+        }
+        
+        // 命令分词器（处理带引号的参数）
+        function tokenizeCommand(cmd) {
+            const tokens = [];
+            let currentToken = '';
+            let inQuotes = false;
+            let quoteChar = '';
+            let escapeNext = false;
+            
+            for (let i = 0; i < cmd.length; i++) {
+                const char = cmd[i];
+                
+                if (escapeNext) {
+                    currentToken += char;
+                    escapeNext = false;
+                    continue;
+                }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                
+                if (char === '"' || char === "'") {
+                    if (inQuotes && char === quoteChar) {
+                        // 闭合引号
+                        inQuotes = false;
+                        quoteChar = '';
+                    } else if (!inQuotes) {
+                        // 打开引号
+                        inQuotes = true;
+                        quoteChar = char;
+                    } else {
+                        // 不同类型的引号，作为普通字符处理
+                        currentToken += char;
+                    }
+                } else if (char === ' ' && !inQuotes) {
+                    // 空格分隔符（不在引号内）
+                    if (currentToken) {
+                        tokens.push(currentToken);
+                        currentToken = '';
+                    }
+                } else {
+                    // 普通字符
+                    currentToken += char;
+                }
+            }
+            
+            // 添加最后一个token
+            if (currentToken) {
+                tokens.push(currentToken);
+            }
+            
+            // 如果仍在引号内，视为未闭合引号，发出警告
+            if (inQuotes) {
+                showNotification('警告：命令中存在未闭合的引号', 'warning');
+            }
+            
+            return tokens;
+        }
+        
+        // 转换docker-compose到Docker命令
+        function convertComposeToDocker(composeYml) {
+            try {
+                // 使用专业YAML解析库解析
+                let composeObj;
+                try {
+                    composeObj = jsyaml.load(composeYml);
+                } catch (e) {
+                    throw new Error(`YAML解析错误: ${e.message}`);
+                }
+                
+                if (!composeObj || !composeObj.services) {
+                    throw new Error('未找到有效的services配置');
+                }
+                
+                // 为每个服务生成Docker命令
+                let commands = [];
+                for (const [serviceName, config] of Object.entries(composeObj.services)) {
+                    if (!config.image) {
+                        continue; // 跳过没有镜像的服务
+                    }
+                    
+                    let cmdParts = ['docker run'];
+                    
+                    // 添加--name参数
+                    if (config.container_name) {
+                        cmdParts.push(`--name ${escapeShellArg(config.container_name)}`);
+                    } else {
+                        cmdParts.push(`--name ${serviceName}`);
+                    }
+                    
+                    // 添加-d参数（默认添加，因为compose通常后台运行）
+                    cmdParts.push('-d');
+                    
+                    // 添加端口映射
+                    if (config.ports && Array.isArray(config.ports)) {
+                        config.ports.forEach(port => {
+                            // 处理数组形式的ports配置 ["80:80"] 或 "80:80"
+                            const portStr = typeof port === 'string' ? port : port.toString();
+                            cmdParts.push(`-p ${escapeShellArg(portStr)}`);
+                        });
+                    }
+                    
+                    // 添加卷挂载
+                    if (config.volumes && Array.isArray(config.volumes)) {
+                        config.volumes.forEach(volume => {
+                            const volumeStr = typeof volume === 'string' ? volume : volume.toString();
+                            cmdParts.push(`-v ${escapeShellArg(volumeStr)}`);
+                        });
+                    }
+                    
+                    // 添加环境变量
+                    if (config.environment) {
+                        if (Array.isArray(config.environment)) {
+                            config.environment.forEach(env => {
+                                cmdParts.push(`-e ${escapeShellArg(env)}`);
+                            });
+                        } else if (typeof config.environment === 'object') {
+                            // 处理对象形式的environment
+                            for (const [key, value] of Object.entries(config.environment)) {
+                                cmdParts.push(`-e ${escapeShellArg(`${key}=${value}`)}`);
+                            }
+                        }
+                    }
+                    
+                    // 添加重启策略
+                    if (config.restart) {
+                        cmdParts.push(`--restart ${escapeShellArg(config.restart)}`);
+                    }
+                    
+                    // 添加网络配置
+                    if (config.networks) {
+                        if (Array.isArray(config.networks)) {
+                            cmdParts.push(`--network ${escapeShellArg(config.networks[0])}`);
+                        } else if (typeof config.networks === 'string') {
+                            cmdParts.push(`--network ${escapeShellArg(config.networks)}`);
+                        } else if (typeof config.networks === 'object') {
+                            // 处理对象形式的networks配置
+                            const networkNames = Object.keys(config.networks);
+                            if (networkNames.length > 0) {
+                                cmdParts.push(`--network ${escapeShellArg(networkNames[0])}`);
+                            }
+                        }
+                    }
+                    
+                    // 添加链接
+                    if (config.links && Array.isArray(config.links)) {
+                        config.links.forEach(link => {
+                            cmdParts.push(`--link ${escapeShellArg(link)}`);
+                        });
+                    }
+                    
+                    // 添加命令
+                    if (config.command) {
+                        if (Array.isArray(config.command)) {
+                            config.command.forEach(arg => {
+                                cmdParts.push(escapeShellArg(arg));
+                            });
+                        } else {
+                            cmdParts.push(escapeShellArg(config.command));
+                        }
+                    }
+                    
+                    // 添加镜像名称
+                    cmdParts.push(escapeShellArg(config.image));
+                    
+                    // 组合命令
+                    const cmd = cmdParts.join(' ');
+                    commands.push(cmd);
+                }
+                
+                if (commands.length === 0) {
+                    throw new Error('未能生成有效的Docker命令');
+                }
+                
+                // 根据格式要求返回命令
+                return outputFormat === 'single' 
+                    ? commands.join('\n\n') 
+                    : commands.map(cmd => convertToMultiLine(cmd)).join('\n\n');
+            } catch (error) {
+                showNotification(`转换失败: ${error.message}`, 'error');
+                return '';
+            }
+        }
+        
+        // 转义shell参数
+        function escapeShellArg(arg) {
+            if (/[\s'"]/.test(arg)) {
+                // 如果包含单引号，使用双引号包裹并转义内部双引号
+                if (arg.includes("'")) {
+                    return `"${arg.replace(/"/g, '\\"')}"`;
+                }
+                // 否则使用单引号包裹
+                return `'${arg}'`;
+            }
+            return arg;
+        }
+        
+        // 转换为多行格式
+        function convertToMultiLine(cmd) {
+            // 分割参数，在适当的位置添加换行和反斜杠
+            const parts = tokenizeCommand(cmd);
+            if (parts.length < 2) return cmd;
+            
+            let result = parts[0] + ' ' + parts[1]; // "docker run"
+            
+            for (let i = 2; i < parts.length; i++) {
+                // 对于参数选项，在前面添加换行
+                if (parts[i].startsWith('-') || parts[i].startsWith('--')) {
+                    result += ' \\\n  ' + parts[i];
+                } else {
+                    result += ' ' + parts[i];
+                }
+            }
+            
+            return result;
+        }
+        
+        // 转换为单行格式
+        function convertToSingleLine(cmd) {
+            return cmd.replace(/\\\n\s*/g, ' ').trim();
+        }
+        
+        // 转换按钮点击事件
+        function handleConvert() {
+            const cmd = dockerCommand.value.trim();
+            if (!cmd) {
+                showNotification('请输入Docker命令', 'warning');
+                return;
+            }
+            
+            const compose = convertDockerToCompose(cmd);
+            if (compose) {
+                composeOutput.textContent = compose;
+                showNotification('转换成功');
+            }
+        }
+        
+        // 反向转换按钮点击事件
+        function handleReverseConvert() {
+            const compose = composeInput.value.trim();
+            if (!compose) {
+                showNotification('请输入docker-compose配置', 'warning');
+                return;
+            }
+            
+            const cmd = convertComposeToDocker(compose);
+            if (cmd) {
+                dockerCmdOutput.textContent = cmd;
+                showNotification('反向转换成功');
+            }
+        }
+        
+        // 绑定事件
+        convertBtn.addEventListener('click', handleConvert);
+        convertBtnMobile.addEventListener('click', handleConvert);
+        reverseConvertBtn.addEventListener('click', handleReverseConvert);
+        reverseConvertBtnMobile.addEventListener('click', handleReverseConvert);
+        
+        // 初始化页面
+        window.addEventListener('load', () => {
+            // 初始化按钮颜色
+            updateConvertButtonColor();
+            updateReverseConvertButtonColor();
+        });
+    </script>
+</body>
+</html>
