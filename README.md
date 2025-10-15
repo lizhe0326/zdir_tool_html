@@ -16,6 +16,8 @@
 | `tool_qrcode.html`  | 二维码生成器：输入文本、链接、联系方式等内容，实时生成可保存的二维码图片     |
 | `tool_tvpage.html`  | 直播源汇总工具：收集 GitHub 平台公开的直播源与接口源资源，支持点击一键复制   |
 | `tool_docker-converter.html`  | docker配置转换：支持docker和docker-composep配置互相转换   |
+| `tool_zhipu_api.html`  | 智谱免费模型调用：支持智能对话，生成图片，理解图片，需要自己申请免费api   |
+
 
 ## 使用方式
 1. 将所需工具的 `.html` 文件下载至本地设备；
