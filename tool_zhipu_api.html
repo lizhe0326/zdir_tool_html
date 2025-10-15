@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文心大模型API集成平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- 配置Tailwind自定义主题 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#4f46e5',
+                        accent: '#0ea5e9',
+                        dark: '#1e293b',
+                        light: '#f8fafc'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .animate-pulse-slow {
+                animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .backdrop-blur {
+                backdrop-filter: blur(8px);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen flex flex-col">
+    <!-- API密钥配置模态框 -->
+    <div id="api-key-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl p-6 md:p-8 max-w-md w-full mx-4 transform transition-all">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa fa-key text-primary text-2xl"></i>
+                </div>
+                <h2 class="text-xl md:text-2xl font-bold text-gray-900">配置API密钥</h2>
+                <p class="text-gray-500 mt-2">请输入您的智谱API密钥以使用平台功能</p>
+            </div>
+            
+            <div class="mb-6">
+                <label for="api-key-input" class="block text-gray-700 mb-2 text-sm font-medium">智谱API密钥</label>
+                <div class="relative">
+                    <input type="password" id="api-key-input" 
+                           class="w-full p-3 pr-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                           placeholder="请输入API密钥" autocomplete="off">
+                    <button id="toggle-api-visibility" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                        <i class="fa fa-eye-slash"></i>
+                    </button>
+                </div>
+                <p class="text-red-500 text-xs mt-1 hidden" id="api-key-error">请输入有效的智谱API密钥（格式示例：8dcacfcababb40449f8c7449bfe54cf4.GyTxvaafvil3LKwG）</p>
+                <p class="text-gray-500 text-xs mt-1">格式示例：8dcacfcababb40449f8c7449bfe54cf4.GyTxvaafvil3LKwG</p>
+            </div>
+            
+            <button id="save-api-key" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center">
+                <i class="fa fa-check mr-2"></i> 确定
+            </button>
+        </div>
+    </div>
+
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-md fixed w-full z-40 transition-all duration-300" id="navbar">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-braille text-primary text-2xl"></i>
+                <h1 class="text-xl md:text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                    文心大模型API平台
+                </h1>
+            </div>
+            
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="#" class="text-primary font-medium hover:text-primary/80 transition-colors">首页</a>
+                <a href="#features" class="text-gray-600 hover:text-primary transition-colors">功能</a>
+                <a href="#usage" class="text-gray-600 hover:text-primary transition-colors">使用说明</a>
+                <a href="#history" class="text-gray-600 hover:text-primary transition-colors">历史记录</a>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <button id="edit-api-key" class="p-2 rounded-full hover:bg-gray-100 transition-colors hidden">
+                    <i class="fa fa-key text-gray-600"></i>
+                </button>
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+                    <i class="fa fa-moon-o text-gray-600"></i>
+                </button>
+                <button class="md:hidden p-2 rounded-full hover:bg-gray-100 transition-colors" id="mobile-menu-button">
+                    <i class="fa fa-bars text-gray-600"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 移动端菜单 -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 animate-fadeIn">
+            <div class="container mx-auto px-4 py-2 flex flex-col space-y-3">
+                <a href="#" class="py-2 text-primary font-medium">首页</a>
+                <a href="#features" class="py-2 text-gray-600 hover:text-primary transition-colors">功能</a>
+                <a href="#usage" class="py-2 text-gray-600 hover:text-primary transition-colors">使用说明</a>
+                <a href="#history" class="py-2 text-gray-600 hover:text-primary transition-colors">历史记录</a>
+                <a href="#" id="mobile-edit-api-key" class="py-2 text-gray-600 hover:text-primary transition-colors hidden">
+                    <i class="fa fa-key mr-1"></i> 编辑API密钥
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow pt-16">
+        <!-- 功能选择区 -->
+        <section id="features" class="py-6 bg-gradient-to-b from-white to-gray-50">
+            <div class="container mx-auto px-4">
+                <h2 class="text-2xl md:text-3xl font-bold text-center mb-8 text-dark">选择功能</h2>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- 对话功能 -->
+                    <div class="feature-card bg-white rounded-xl shadow-md p-5 cursor-pointer hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 border border-gray-100 active" data-feature="chat">
+                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="fa fa-comments text-primary text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">智能对话</h3>
+                        <p class="text-gray-500 text-sm">与AI进行自然语言交互</p>
+                    </div>
+                    
+                    <!-- 深度思考功能 -->
+                    <div class="feature-card bg-white rounded-xl shadow-md p-5 cursor-pointer hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 border border-gray-100" data-feature="deep-thinking">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="fa fa-lightbulb-o text-yellow-500 text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">深度思考</h3>
+                        <p class="text-gray-500 text-sm">查看AI思考过程和结果</p>
+                    </div>
+                    
+                    <!-- 图片理解 -->
+                    <div class="feature-card bg-white rounded-xl shadow-md p-5 cursor-pointer hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 border border-gray-100" data-feature="image-understanding">
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="fa fa-eye text-green-600 text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">图片理解</h3>
+                        <p class="text-gray-500 text-sm">上传图片并提问获取分析</p>
+                    </div>
+                    
+                    <!-- 图像生成 -->
+                    <div class="feature-card bg-white rounded-xl shadow-md p-5 cursor-pointer hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 border border-gray-100" data-feature="image">
+                        <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="fa fa-picture-o text-orange-500 text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">图像生成</h3>
+                        <p class="text-gray-500 text-sm">根据描述生成图片</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 功能操作区 -->
+        <section class="py-8">
+            <div class="container mx-auto px-4">
+                <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <!-- 对话功能面板 -->
+                    <div class="feature-panel active" id="chat-panel">
+                        <div class="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                            <h3 class="font-semibold text-lg">智能对话</h3>
+                            <div class="flex space-x-2">
+                                <button class="p-2 text-gray-500 hover:text-primary transition-colors" id="clear-chat">
+                                    <i class="fa fa-trash-o"></i>
+                                </button>
+                                <button class="p-2 text-gray-500 hover:text-primary transition-colors" id="download-chat">
+                                    <i class="fa fa-download"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="chat-messages" class="h-[400px] overflow-y-auto p-4 space-y-4 scrollbar-hide">
+                            <!-- 系统提示消息 -->
+                            <div class="flex items-start space-x-3">
+                                <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa fa-robot text-primary"></i>
+                                </div>
+                                <div class="bg-gray-100 rounded-lg rounded-tl-none px-4 py-3 max-w-[80%]">
+                                    <p>您好！我是基于文心大模型的智能助手，有什么可以帮助您的吗？</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="p-4 border-t border-gray-100">
+                            <div class="relative">
+                                <textarea id="chat-input" class="w-full p-3 pr-12 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all resize-none" rows="3" placeholder="请输入您的问题..."></textarea>
+                                <button id="send-chat" class="absolute right-3 bottom-3 text-primary hover:text-primary/80 transition-colors">
+                                    <i class="fa fa-paper-plane text-xl"></i>
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap justify-between gap-2 mt-3 text-sm text-gray-500">
+                                <div>Shift+Enter换行</div>
+                                <div class="flex items-center gap-3">
+                                    <div>
+                                        <select id="chat-model" class="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-sm">
+                                            <option value="glm-4">GLM-4</option>
+                                            <option value="glm-4.6">GLM-4-6B</option>
+                                            <option value="ernie-bot">ERNIE-Bot</option>
+                                            <option value="ernie-bot-turbo">ERNIE-Bot-turbo</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <label for="temperature" class="whitespace-nowrap">温度:</label>
+                                        <input type="range" id="temperature" min="0" max="2" step="0.1" value="1" class="w-24 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary">
+                                        <span id="temperature-value">1.0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 深度思考面板 -->
+                    <div class="feature-panel hidden" id="deep-thinking-panel">
+                        <div class="p-4 bg-gray-50 border-b border-gray-100">
+                            <h3 class="font-semibold text-lg">深度思考</h3>
+                        </div>
+                        
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">输入您的问题</label>
+                                <textarea id="thinking-input" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all resize-none" rows="3" placeholder="请输入您希望AI深入思考的问题..."></textarea>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">选择模型</label>
+                                    <select id="thinking-model" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="glm-4.6" selected>GLM-4-6B</option>
+                                        <option value="glm-4">GLM-4</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">思考详细程度</label>
+                                    <select id="thinking-detail" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="brief">简洁</option>
+                                        <option value="detailed" selected>详细</option>
+                                        <option value="verbose">非常详细</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">输出方式</label>
+                                    <select id="thinking-stream" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="true" selected>流式输出（实时展示）</option>
+                                        <option value="false">完整输出（全部完成后展示）</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <button id="start-thinking" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center">
+                                <i class="fa fa-lightbulb-o mr-2"></i> 开始思考
+                            </button>
+                            
+                            <div id="thinking-result" class="mt-6 hidden">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">思考结果</label>
+                                
+                                <!-- 思考过程和最终结果的选项卡 -->
+                                <div class="border-b border-gray-200 mb-4">
+                                    <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="thinking-tabs" role="tablist">
+                                        <li class="mr-2" role="presentation">
+                                            <button class="inline-block p-4 border-b-2 border-primary text-primary rounded-t-lg" id="thinking-process-tab" data-tabs-target="#thinking-process" type="button" role="tab" aria-selected="true">
+                                                思考过程
+                                            </button>
+                                        </li>
+                                        <li class="mr-2" role="presentation">
+                                            <button class="inline-block p-4 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 rounded-t-lg" id="final-result-tab" data-tabs-target="#final-result" type="button" role="tab" aria-selected="false">
+                                                最终结果
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <!-- 思考过程 -->
+                                <div id="thinking-process" class="bg-gray-50 p-4 rounded-lg border border-gray-100 mb-4 min-h-[150px]">
+                                    <!-- 思考过程将在这里动态显示 -->
+                                </div>
+                                
+                                <!-- 最终结果 -->
+                                <div id="final-result" class="bg-gray-50 p-4 rounded-lg border border-gray-100 hidden min-h-[150px]">
+                                    <!-- 最终结果将在这里动态显示 -->
+                                </div>
+                                
+                                <div class="flex justify-end space-x-3 mt-3">
+                                    <button id="copy-thinking" class="bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-4 rounded text-sm transition-colors flex items-center">
+                                        <i class="fa fa-copy mr-1"></i> 复制结果
+                                    </button>
+                                    <button id="new-thinking" class="bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded text-sm transition-colors flex items-center">
+                                        <i class="fa fa-refresh mr-1"></i> 新问题
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="thinking-loading" class="mt-6 hidden">
+                                <div class="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg">
+                                    <div class="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
+                                    <p class="text-gray-600">AI正在思考，请稍候...</p>
+                                    <p class="text-xs text-gray-500 mt-1">根据问题复杂度，可能需要10-60秒</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 图片理解面板 -->
+                    <div class="feature-panel hidden" id="image-understanding-panel">
+                        <div class="p-4 bg-gray-50 border-b border-gray-100">
+                            <h3 class="font-semibold text-lg">图片理解</h3>
+                        </div>
+                        
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">上传图片（最多5张）</label>
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer" id="image-upload-area">
+                                    <i class="fa fa-cloud-upload text-3xl text-gray-400 mb-2"></i>
+                                    <p class="text-gray-500">拖放图片到此处，或<span class="text-primary">点击上传</span></p>
+                                    <p class="text-xs text-gray-400 mt-1">支持格式：jpg, png, jpeg (单张不超过10MB)</p>
+                                    <input type="file" id="image-upload" accept="image/*" multiple class="hidden">
+                                </div>
+                                
+                                <!-- 已上传图片预览区 -->
+                                <div id="image-preview-container" class="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 hidden">
+                                    <!-- 图片预览将动态添加到这里 -->
+                                </div>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">关于图片的问题</label>
+                                <textarea id="image-question" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all resize-none" rows="3" placeholder="请输入关于图片的问题，例如：这张图片讲了什么？"></textarea>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">选择模型</label>
+                                    <select id="image-model" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="glm-4.5v" selected>glm-4.5v</option>
+                                        <option value="glm-4v">glm-4v</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">回答语言</label>
+                                    <select id="answer-language" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="zh">中文</option>
+                                        <option value="en">英文</option>
+                                        <option value="ja">日文</option>
+                                        <option value="ko">韩文</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <button id="analyze-image" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center">
+                                <i class="fa fa-search mr-2"></i> 分析图片
+                            </button>
+                            
+                            <div id="image-analysis-result" class="mt-6 hidden">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">分析结果</label>
+                                <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                    <div id="analysis-content" class="prose max-w-none"></div>
+                                </div>
+                                <div class="mt-3 flex justify-end">
+                                    <button id="copy-analysis" class="bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded text-sm transition-colors">
+                                        <i class="fa fa-copy mr-1"></i> 复制结果
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="image-analysis-loading" class="mt-6 hidden">
+                                <div class="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg">
+                                    <div class="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
+                                    <p class="text-gray-600">正在分析图片，请稍候...</p>
+                                    <p class="text-xs text-gray-500 mt-1">图片分析可能需要10-30秒时间</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 图像生成面板 -->
+                    <div class="feature-panel hidden" id="image-panel">
+                        <div class="p-4 bg-gray-50 border-b border-gray-100">
+                            <h3 class="font-semibold text-lg">图像生成</h3>
+                        </div>
+                        
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">描述词</label>
+                                <textarea id="image-prompt" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all resize-none" rows="3" placeholder="请输入图像描述，例如：一只可爱的小猫咪，坐在阳光明媚的窗台上，背景是蓝天白云..."></textarea>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">选择模型</label>
+                                    <select id="generate-image-model" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="cogView-4-250304">cogView-4-250304</option>
+                                        <option value="cogView-3">cogView-3</option>
+                                        <option value="stable-diffusion-xl">Stable Diffusion XL</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 mb-2 text-sm font-medium">图像尺寸</label>
+                                    <select id="generate-image-size" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all">
+                                        <option value="512x512">512x512</option>
+                                        <option value="640x480">640x480</option>
+                                        <option value="480x640">480x640</option>
+                                        <option value="1024x1024">1024x1024</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <button id="generate-image-button" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center">
+                                <i class="fa fa-magic mr-2"></i> 生成图像
+                            </button>
+                            
+                            <div id="generate-image-result" class="mt-6 hidden">
+                                <label class="block text-gray-700 mb-2 text-sm font-medium">生成结果</label>
+                                <div id="generate-image-gallery" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <!-- 生成的图像将在这里显示 -->
+                                </div>
+                            </div>
+                            
+                            <div id="generate-image-loading" class="mt-6 hidden">
+                                <div class="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg">
+                                    <div class="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
+                                    <p class="text-gray-600">正在生成图像，请稍候...</p>
+                                    <p class="text-xs text-gray-500 mt-1">图像生成可能需要10-30秒时间</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 使用说明 -->
+        <section id="usage" class="py-12 bg-gray-50">
+            <div class="container mx-auto px-4">
+                <h2 class="text-2xl md:text-3xl font-bold text-center mb-10 text-dark">使用说明</h2>
+                
+                <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6 md:p-8">
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 text-primary">API 功能说明</h3>
+                            <ul class="space-y-2 text-gray-700">
+                                <li class="flex items-start">
+                                    <i class="fa fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                    <span><strong>智能对话</strong>：与文心大模型进行自然语言交互，获取信息和回答</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fa fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                    <span><strong>深度思考</strong>：查看AI的思考过程，了解AI如何逐步解决问题</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fa fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                    <span><strong>图片理解</strong>：上传图片并提问，获取AI对图片内容的分析</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fa fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                    <span><strong>图像生成</strong>：根据文本描述生成高质量图像</span>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 text-primary">API密钥管理</h3>
+                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <p class="text-sm text-blue-800">
+                                    <i class="fa fa-info-circle mr-1"></i> 
+                                    系统会优先使用您最新输入的API密钥。每次更新密钥后，所有功能将自动使用新密钥进行调用，无需重启应用。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 text-primary">API 密钥信息</h3>
+                            <div class="bg-gray-50 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                                <code id="api-key-display">请配置API密钥以使用功能</code>
+                            </div>
+                            <p class="text-gray-500 text-sm mt-2">API密钥将安全存储在本地，不会上传到服务器。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 历史记录 -->
+        <section id="history" class="py-12">
+            <div class="container mx-auto px-4">
+                <h2 class="text-2xl md:text-3xl font-bold text-center mb-10 text-dark">历史记录</h2>
+                
+                <div class="max-w-4xl mx-auto">
+                    <div id="history-list" class="space-y-4">
+                        <!-- 历史记录将在这里动态显示 -->
+                        <div class="text-center text-gray-500 py-10 bg-gray-50 rounded-xl">
+                            <i class="fa fa-history text-4xl mb-3 opacity-30"></i>
+                            <p>暂无历史记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa fa-braille text-primary text-2xl"></i>
+                        <h2 class="text-xl font-bold">文心大模型API平台</h2>
+                    </div>
+                    <p class="text-gray-400 mt-2 text-sm">集成文心大模型的全方位AI能力</p>
+                </div>
+                
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fa fa-github text-xl"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fa fa-twitter text-xl"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fa fa-linkedin text-xl"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-800 mt-6 pt-6 text-center text-gray-500 text-sm">
+                <p>© 2023 文心大模型API平台 - 基于百度文心大模型开发</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- 通知提示框 -->
+    <div id="notification" class="fixed bottom-5 right-5 bg-dark text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50 max-w-xs">
+        <i id="notification-icon" class="fa fa-check-circle mr-2 text-green-400"></i>
+        <p id="notification-message">操作成功</p>
+    </div>
+    
+    <script>
+        // API配置 - 从本地存储获取，默认空
+        let API_KEY = localStorage.getItem('zhipuApiKey') || '';
+        const API_CHAT_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+        const API_IMAGE_URL = 'https://open.bigmodel.cn/api/paas/v4/images/generations';
+        
+        // 存储上传的图片信息
+        let uploadedImages = [];
+        let thinkingProcess = ""; // 存储AI思考过程
+        let finalResult = ""; // 存储AI最终结果
+        let controller = null; // 用于取消流式请求
+        
+        // DOM元素
+        const navbar = document.getElementById('navbar');
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const themeToggle = document.getElementById('theme-toggle');
+        const featureCards = document.querySelectorAll('.feature-card');
+        const featurePanels = document.querySelectorAll('.feature-panel');
+        
+        // API密钥相关元素
+        const apiKeyModal = document.getElementById('api-key-modal');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const apiKeyError = document.getElementById('api-key-error');
+        const saveApiKeyButton = document.getElementById('save-api-key');
+        const toggleApiVisibilityButton = document.getElementById('toggle-api-visibility');
+        const editApiKeyButton = document.getElementById('edit-api-key');
+        const mobileEditApiKeyButton = document.getElementById('mobile-edit-api-key');
+        const apiKeyDisplay = document.getElementById('api-key-display');
+        
+        // 对话功能元素
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendChatButton = document.getElementById('send-chat');
+        const clearChatButton = document.getElementById('clear-chat');
+        const downloadChatButton = document.getElementById('download-chat');
+        const chatModelSelect = document.getElementById('chat-model');
+        const temperatureSlider = document.getElementById('temperature');
+        const temperatureValue = document.getElementById('temperature-value');
+        
+        // 深度思考功能元素
+        const thinkingInput = document.getElementById('thinking-input');
+        const thinkingModelSelect = document.getElementById('thinking-model');
+        const thinkingDetailSelect = document.getElementById('thinking-detail');
+        const thinkingStreamSelect = document.getElementById('thinking-stream');
+        const startThinkingButton = document.getElementById('start-thinking');
+        const thinkingResult = document.getElementById('thinking-result');
+        const thinkingProcessElement = document.getElementById('thinking-process');
+        const finalResultElement = document.getElementById('final-result');
+        const thinkingTabs = document.querySelectorAll('#thinking-tabs button');
+        const copyThinkingButton = document.getElementById('copy-thinking');
+        const newThinkingButton = document.getElementById('new-thinking');
+        const thinkingLoading = document.getElementById('thinking-loading');
+        
+        // 图片理解元素
+        const imageUploadArea = document.getElementById('image-upload-area');
+        const imageUploadInput = document.getElementById('image-upload');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imageQuestion = document.getElementById('image-question');
+        const imageModelSelect = document.getElementById('image-model');
+        const answerLanguageSelect = document.getElementById('answer-language');
+        const analyzeImageButton = document.getElementById('analyze-image');
+        const imageAnalysisResult = document.getElementById('image-analysis-result');
+        const analysisContent = document.getElementById('analysis-content');
+        const copyAnalysisButton = document.getElementById('copy-analysis');
+        const imageAnalysisLoading = document.getElementById('image-analysis-loading');
+        
+        // 图像生成元素
+        const imagePrompt = document.getElementById('image-prompt');
+        const generateImageModelSelect = document.getElementById('generate-image-model');
+        const generateImageSizeSelect = document.getElementById('generate-image-size');
+        const generateImageButton = document.getElementById('generate-image-button');
+        const generateImageResult = document.getElementById('generate-image-result');
+        const generateImageGallery = document.getElementById('generate-image-gallery');
+        const generateImageLoading = document.getElementById('generate-image-loading');
+        
+        // 历史记录元素
+        const historyList = document.getElementById('history-list');
+        
+        // 通知元素
+        const notification = document.getElementById('notification');
+        const notificationIcon = document.getElementById('notification-icon');
+        const notificationMessage = document.getElementById('notification-message');
+        
+        // 全局变量
+        let historyRecords = JSON.parse(localStorage.getItem('aiApiHistory')) || [];
+        // 存储聊天历史消息，用于API调用
+        let chatHistory = [
+            {
+                "role": "system",
+                "content": "你是一个有用的AI助手。"
+            }
+        ];
+        
+        // 初始化
+        function init() {
+            // 检查API密钥是否已配置
+            checkApiKey();
+            
+            updateHistoryList();
+            setupEventListeners();
+        }
+        
+        // 检查API密钥状态
+        function checkApiKey() {
+            // 从本地存储重新获取，确保总是使用最新保存的密钥
+            API_KEY = localStorage.getItem('zhipuApiKey') || '';
+            
+            if (API_KEY && isValidApiKey(API_KEY)) {
+                // 已配置有效密钥，隐藏模态框，显示编辑按钮
+                apiKeyModal.classList.add('hidden');
+                editApiKeyButton.classList.remove('hidden');
+                mobileEditApiKeyButton.classList.remove('hidden');
+                
+                // 显示已配置但不展示具体密钥
+                apiKeyDisplay.textContent = "已配置: 智谱API密钥";
+                
+                // 启用所有功能按钮
+                enableFeatureButtons(true);
+            } else {
+                // 未配置或密钥无效，显示模态框，隐藏编辑按钮
+                apiKeyModal.classList.remove('hidden');
+                editApiKeyButton.classList.add('hidden');
+                mobileEditApiKeyButton.classList.add('hidden');
+                
+                apiKeyDisplay.textContent = "请配置API密钥以使用功能";
+                
+                // 禁用所有功能按钮
+                enableFeatureButtons(false);
+            }
+        }
+        
+        // 验证智谱API密钥格式
+        function isValidApiKey(key) {
+            // 智谱API密钥格式：32个十六进制字符 + 点 + 16个字母数字字符
+            // 示例：8dcacfcababb40449f8c7449bfe54cf4.GyTxvaafvil3LKwG
+            const apiKeyPattern = /^[A-Fa-f0-9]{32}\.[A-Za-z0-9]{16}$/;
+            return apiKeyPattern.test(key);
+        }
+        
+        // 启用/禁用功能按钮
+        function enableFeatureButtons(enable) {
+            const buttons = [
+                sendChatButton,
+                clearChatButton,
+                downloadChatButton,
+                startThinkingButton,
+                analyzeImageButton,
+                generateImageButton,
+                copyThinkingButton,
+                newThinkingButton,
+                copyAnalysisButton
+            ];
+            
+            buttons.forEach(button => {
+                if (enable) {
+                    button.removeAttribute('disabled');
+                    button.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    button.setAttribute('disabled', 'true');
+                    button.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            });
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // API密钥相关事件
+            saveApiKeyButton.addEventListener('click', saveApiKey);
+            toggleApiVisibilityButton.addEventListener('click', toggleApiKeyVisibility);
+            editApiKeyButton.addEventListener('click', showApiKeyModal);
+            mobileEditApiKeyButton.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+                showApiKeyModal();
+            });
+            
+            // 导航栏滚动效果
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 10) {
+                    navbar.classList.add('py-2', 'shadow-lg');
+                    navbar.classList.remove('py-3', 'shadow-md');
+                } else {
+                    navbar.classList.add('py-3', 'shadow-md');
+                    navbar.classList.remove('py-2', 'shadow-lg');
+                }
+            });
+            
+            // 移动端菜单切换
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+            
+            // 主题切换
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode');
+                const icon = themeToggle.querySelector('i');
+                if (icon.classList.contains('fa-moon-o')) {
+                    icon.classList.remove('fa-moon-o');
+                    icon.classList.add('fa-sun-o');
+                } else {
+                    icon.classList.remove('fa-sun-o');
+                    icon.classList.add('fa-moon-o');
+                }
+            });
+            
+            // 功能卡片切换 - 添加API密钥检查
+            featureCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    // 检查API密钥是否有效
+                    if (!API_KEY || !isValidApiKey(API_KEY)) {
+                        showApiKeyModal();
+                        showNotification('请先配置有效的智谱API密钥才能使用功能', true);
+                        return;
+                    }
+                    
+                    const feature = card.getAttribute('data-feature');
+                    
+                    // 更新卡片状态
+                    featureCards.forEach(c => c.classList.remove('active', 'bg-primary/5', 'border-primary/30'));
+                    card.classList.add('active', 'bg-primary/5', 'border-primary/30');
+                    
+                    // 更新面板显示
+                    featurePanels.forEach(panel => panel.classList.add('hidden'));
+                    document.getElementById(`${feature}-panel`).classList.remove('hidden');
+                });
+            });
+            
+            // 对话功能
+            sendChatButton.addEventListener('click', sendChatMessage);
+            chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                }
+            });
+            
+            // 温度参数调节
+            temperatureSlider.addEventListener('input', () => {
+                temperatureValue.textContent = temperatureSlider.value;
+            });
+            
+            clearChatButton.addEventListener('click', clearChatMessages);
+            downloadChatButton.addEventListener('click', downloadChatHistory);
+            
+            // 深度思考功能
+            startThinkingButton.addEventListener('click', startThinking);
+            newThinkingButton.addEventListener('click', resetThinking);
+            
+            // 思考结果选项卡切换
+            thinkingTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // 移除所有选项卡的活跃状态
+                    thinkingTabs.forEach(t => {
+                        t.classList.remove('border-primary', 'text-primary');
+                        t.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                        t.setAttribute('aria-selected', 'false');
+                    });
+                    
+                    // 设置当前选项卡为活跃状态
+                    tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                    tab.classList.add('border-primary', 'text-primary');
+                    tab.setAttribute('aria-selected', 'true');
+                    
+                    // 显示对应的内容
+                    const target = tab.getAttribute('data-tabs-target');
+                    document.querySelectorAll('#thinking-process, #final-result').forEach(content => {
+                        content.classList.add('hidden');
+                    });
+                    document.querySelector(target).classList.remove('hidden');
+                });
+            });
+            
+            copyThinkingButton.addEventListener('click', () => {
+                navigator.clipboard.writeText(finalResult)
+                    .then(() => {
+                        showNotification('最终结果已复制到剪贴板');
+                    })
+                    .catch(err => {
+                        console.error('复制失败:', err);
+                        showNotification('复制失败，请手动复制', true);
+                    });
+            });
+            
+            // 图片理解功能
+            imageUploadArea.addEventListener('click', () => imageUploadInput.click());
+            imageUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                imageUploadArea.classList.add('border-primary');
+            });
+            
+            imageUploadArea.addEventListener('dragleave', () => {
+                imageUploadArea.classList.remove('border-primary');
+            });
+            
+            imageUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                imageUploadArea.classList.remove('border-primary');
+                if (e.dataTransfer.files.length) {
+                    handleImageFiles(e.dataTransfer.files);
+                }
+            });
+            
+            imageUploadInput.addEventListener('change', () => {
+                if (imageUploadInput.files.length) {
+                    handleImageFiles(imageUploadInput.files);
+                }
+            });
+            
+            analyzeImageButton.addEventListener('click', analyzeImages);
+            copyAnalysisButton.addEventListener('click', copyAnalysisResult);
+            
+            // 图像生成功能
+            generateImageButton.addEventListener('click', generateImage);
+        }
+        
+        // 显示API密钥配置模态框
+        function showApiKeyModal() {
+            // 显示当前存储的密钥（但默认隐藏）
+            apiKeyInput.value = API_KEY;
+            apiKeyError.classList.add('hidden');
+            apiKeyModal.classList.remove('hidden');
+            
+            // 确保输入框类型为密码（默认隐藏）
+            apiKeyInput.type = 'password';
+            toggleApiVisibilityButton.querySelector('i').classList.remove('fa-eye');
+            toggleApiVisibilityButton.querySelector('i').classList.add('fa-eye-slash');
+        }
+        
+        // 保存API密钥
+        function saveApiKey() {
+            const key = apiKeyInput.value.trim();
+            
+            // 验证是否填写
+            if (!key) {
+                apiKeyError.textContent = "请输入智谱API密钥";
+                apiKeyError.classList.remove('hidden');
+                return;
+            }
+            
+            // 验证格式
+            if (!isValidApiKey(key)) {
+                apiKeyError.textContent = "请输入有效的智谱API密钥（格式示例：8dcacfcababb40449f8c7449bfe54cf4.GyTxvaafvil3LKwG）";
+                apiKeyError.classList.remove('hidden');
+                return;
+            }
+            
+            // 保存密钥
+            API_KEY = key;
+            localStorage.setItem('zhipuApiKey', key);
+            
+            // 更新界面状态 - 隐藏API密钥
+            apiKeyModal.classList.add('hidden');
+            checkApiKey();
+            showNotification('API密钥配置成功');
+        }
+        
+        // 切换API密钥显示/隐藏
+        function toggleApiKeyVisibility() {
+            const icon = toggleApiVisibilityButton.querySelector('i');
+            
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            } else {
+                apiKeyInput.type = 'password';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            }
+        }
+        
+        // 显示通知
+        function showNotification(message, isError = false) {
+            notificationMessage.textContent = message;
+            
+            if (isError) {
+                notificationIcon.className = 'fa fa-exclamation-circle mr-2 text-red-400';
+            } else {
+                notificationIcon.className = 'fa fa-check-circle mr-2 text-green-400';
+            }
+            
+            notification.classList.remove('translate-y-20', 'opacity-0');
+            notification.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                notification.classList.remove('translate-y-0', 'opacity-100');
+                notification.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+        
+        // 检查API密钥并提示用户配置
+        function checkAndPromptApiKey() {
+            if (!API_KEY || !isValidApiKey(API_KEY)) {
+                showApiKeyModal();
+                showNotification('请先配置有效的智谱API密钥才能使用功能', true);
+                return false;
+            }
+            return true;
+        }
+        
+        // API调用函数 - 确保使用最新的API_KEY
+        async function callApi(url, data) {
+            // 每次调用前都获取最新的密钥
+            API_KEY = localStorage.getItem('zhipuApiKey') || '';
+            
+            if (!API_KEY || !isValidApiKey(API_KEY)) {
+                throw new Error('API密钥未配置或无效，请先配置有效的密钥');
+            }
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            return response;
+        }
+        
+        // 其他功能实现代码（对话、深度思考、图片理解、图像生成等）
+        // 对话功能
+        function sendChatMessage() {
+            // 检查API密钥
+            if (!checkAndPromptApiKey()) return;
+            
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // 添加用户消息到界面
+            addChatMessage('user', message);
+            chatInput.value = '';
+            
+            // 将消息添加到历史记录中，用于API调用
+            chatHistory.push({
+                "role": "user",
+                "content": message
+            });
+            
+            // 显示加载状态
+            const loadingMessage = addChatMessage('ai', '', true);
+            
+            // 调用API
+            callChatApi(loadingMessage);
+        }
+        
+        function addChatMessage(sender, message, isLoading = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex items-start space-x-3';
+            
+            let avatar, bgClass;
+            
+            if (sender === 'user') {
+                messageDiv.classList.add('justify-end');
+                avatar = '<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"><i class="fa fa-user text-gray-600"></i></div>';
+                bgClass = 'bg-primary text-white';
+            } else {
+                avatar = '<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><i class="fa fa-robot text-primary"></i></div>';
+                bgClass = 'bg-gray-100';
+            }
+            
+            let messageContent;
+            if (isLoading) {
+                messageContent = `
+                    <div class="${bgClass} rounded-lg rounded-tl-none px-4 py-3 max-w-[80%]">
+                        <div class="flex space-x-1">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                        </div>
+                    </div>
+                `;
+                messageDiv.setAttribute('data-loading', 'true');
+            } else {
+                messageContent = `
+                    <div class="${bgClass} rounded-lg rounded-tl-none px-4 py-3 max-w-[80%]">
+                        <p>${formatMessage(message)}</p>
+                    </div>
+                `;
+            }
+            
+            if (sender === 'user') {
+                messageDiv.innerHTML = `${messageContent}${avatar}`;
+            } else {
+                messageDiv.innerHTML = `${avatar}${messageContent}`;
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            return messageDiv;
+        }
+        
+        function formatMessage(message) {
+            // 简单的格式化
+            return message
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code class="bg-gray-200 px-1 rounded">$1</code>')
+                .replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-200 p-2 rounded overflow-x-auto my-2"><code>$1</code></pre>');
+        }
+        
+        async function callChatApi(loadingMessage) {
+            try {
+                // 检查API密钥
+                if (!checkAndPromptApiKey()) return;
+                
+                const model = chatModelSelect.value;
+                const temperature = parseFloat(temperatureSlider.value);
+                
+                // 构建请求参数
+                const requestData = {
+                    "model": model,
+                    "messages": chatHistory,
+                    "temperature": temperature,
+                    "max_tokens": 65536,
+                    "stream": false
+                };
+                
+                // 使用统一的API调用函数，确保使用最新密钥
+                const response = await callApi(API_CHAT_URL, requestData);
+                
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+                }
+                
+                const responseData = await response.json();
+                
+                // 处理API响应
+                if (responseData.choices && responseData.choices.length > 0) {
+                    const aiResponse = responseData.choices[0].message.content;
+                    
+                    // 移除加载状态
+                    if (loadingMessage && chatMessages.contains(loadingMessage)) {
+                        chatMessages.removeChild(loadingMessage);
+                    }
+                    
+                    // 添加AI回复到界面
+                    addChatMessage('ai', aiResponse);
+                    
+                    // 将AI回复添加到历史记录
+                    chatHistory.push({
+                        "role": "assistant",
+                        "content": aiResponse
+                    });
+                    
+                    // 添加到历史记录
+                    addToHistory('chat', { 
+                        text: chatHistory[chatHistory.length - 2].content.substring(0, 50) + (chatHistory[chatHistory.length - 2].content.length > 50 ? '...' : ''),
+                        model,
+                        temperature
+                    });
+                } else {
+                    throw new Error('API返回格式不正确');
+                }
+                
+            } catch (error) {
+                console.error('对话API调用错误:', error);
+                
+                // 移除加载状态
+                if (loadingMessage && chatMessages.contains(loadingMessage)) {
+                    chatMessages.removeChild(loadingMessage);
+                }
+                
+                // 显示错误消息
+                addChatMessage('ai', `抱歉，无法获取回复：${error.message}`);
+                showNotification(`API调用失败: ${error.message}`, true);
+            }
+        }
+        
+        function clearChatMessages() {
+            chatMessages.innerHTML = `
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fa fa-robot text-primary"></i>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg rounded-tl-none px-4 py-3 max-w-[80%]">
+                        <p>您好！我是基于文心大模型的智能助手，有什么可以帮助您的吗？</p>
+                    </div>
+                </div>
+            `;
+            
+            // 重置聊天历史
+            chatHistory = [
+                {
+                    "role": "system",
+                    "content": "你是一个有用的AI助手。"
+                }
+            ];
+            
+            showNotification('聊天记录已清空');
+        }
+        
+        function downloadChatHistory() {
+            const messages = chatMessages.querySelectorAll('.flex.items-start');
+            let textContent = "聊天记录\n";
+            textContent += "==============================\n\n";
+            
+            messages.forEach(msg => {
+                const isUser = msg.classList.contains('justify-end');
+                const sender = isUser ? "你" : "AI";
+                const content = msg.querySelector('p')?.textContent || "";
+                
+                if (content) {
+                    textContent += `${sender}: ${content}\n\n`;
+                }
+            });
+            
+            const blob = new Blob([textContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-history-${new Date().toISOString().slice(0,10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showNotification('聊天记录已下载');
+        }
+        
+        // 深度思考功能
+        function startThinking() {
+            // 检查API密钥
+            if (!checkAndPromptApiKey()) return;
+            
+            const question = thinkingInput.value.trim();
+            if (!question) {
+                showNotification('请输入您的问题', true);
+                return;
+            }
+            
+            // 重置之前的结果
+            thinkingProcess = "";
+            finalResult = "";
+            thinkingProcessElement.innerHTML = '<div class="text-gray-500 italic">AI开始思考...请等待</div>';
+            finalResultElement.innerHTML = "";
+            
+            // 显示加载状态
+            startThinkingButton.disabled = true;
+            startThinkingButton.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 思考中...';
+            thinkingResult.classList.add('hidden');
+            thinkingLoading.classList.remove('hidden');
+            
+            // 获取参数
+            const model = thinkingModelSelect.value;
+            const detail = thinkingDetailSelect.value;
+            const stream = thinkingStreamSelect.value === "true";
+            
+            // 创建新的AbortController用于取消请求
+            if (controller) {
+                controller.abort();
+            }
+            controller = new AbortController();
+            
+            // 调用深度思考API
+            callThinkingApi(question, model, detail, stream, controller.signal);
+        }
+        
+        function resetThinking() {
+            // 如果有正在进行的请求，取消它
+            if (controller) {
+                controller.abort();
+                controller = null;
+            }
+            
+            // 重置界面
+            thinkingInput.value = "";
+            thinkingProcess = "";
+            finalResult = "";
+            thinkingProcessElement.innerHTML = "";
+            finalResultElement.innerHTML = "";
+            thinkingResult.classList.add('hidden');
+            startThinkingButton.disabled = false;
+            startThinkingButton.innerHTML = '<i class="fa fa-lightbulb-o mr-2"></i> 开始思考';
+        }
+        
+        async function callThinkingApi(question, model, detail, stream, signal) {
+            try {
+                // 检查API密钥
+                if (!checkAndPromptApiKey()) return;
+                
+                // 根据详细程度设置系统提示
+                let systemPrompt = "请解决用户的问题，并以详细的思考过程开始，解释你如何分析问题和找到解决方案，然后再给出最终答案。思考过程和最终答案要清晰区分。";
+                if (detail === "brief") {
+                    systemPrompt = "请解决用户的问题，先提供简短的思考过程，然后给出最终答案。";
+                } else if (detail === "verbose") {
+                    systemPrompt = "请解决用户的问题，提供非常详细的思考过程，包括所有考虑的可能性、分析步骤和决策依据，然后再给出结构清晰的最终答案。思考过程应尽可能详细，展示你的完整推理路径。";
+                }
+                
+                // 构建请求参数
+                const requestData = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": systemPrompt
+                        },
+                        {
+                            "role": "user",
+                            "content": question
+                        }
+                    ],
+                    "thinking": {
+                        "type": "enabled"
+                    },
+                    "stream": stream
+                };
+                
+                // 使用统一的API调用函数
+                const response = await callApi(API_CHAT_URL, requestData);
+                
+                if (!response.ok) {
+                    let errorDetails = '';
+                    try {
+                        const errorData = await response.json();
+                        errorDetails = errorData.error?.message || errorData.msg || '';
+                    } catch (e) {
+                        errorDetails = await response.text();
+                    }
+                    
+                    throw new Error(`API请求失败: ${response.status} ${response.statusText}，详情：${errorDetails}`);
+                }
+                
+                // 显示结果区域
+                thinkingLoading.classList.add('hidden');
+                thinkingResult.classList.remove('hidden');
+                
+                // 处理流式响应
+                if (stream && response.body) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    // 循环读取流数据
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        // 解码接收到的数据
+                        const chunk = decoder.decode(value, { stream: true });
+                        
+                        // 分割SSE事件
+                        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+                        
+                        for (const line of lines) {
+                            // 移除事件前缀
+                            const data = line.replace(/^data: /, '');
+                            if (data === '[DONE]') break;
+                            
+                            try {
+                                // 解析JSON数据
+                                const json = JSON.parse(data);
+                                
+                                // 处理思考过程
+                                if (json.thinking && json.thinking.content) {
+                                    thinkingProcess += json.thinking.content;
+                                    thinkingProcessElement.innerHTML = formatMessage(thinkingProcess) + 
+                                        '<div class="inline-block"><i class="fa fa-circle-o-notch fa-spin text-primary"></i></div>';
+                                    thinkingProcessElement.scrollTop = thinkingProcessElement.scrollHeight;
+                                } 
+                                // 备选方案：如果API将思考过程放在choices中
+                                else if (json.choices && json.choices[0] && json.choices[0].thinking) {
+                                    thinkingProcess += json.choices[0].thinking;
+                                    thinkingProcessElement.innerHTML = formatMessage(thinkingProcess) + 
+                                        '<div class="inline-block"><i class="fa fa-circle-o-notch fa-spin text-primary"></i></div>';
+                                    thinkingProcessElement.scrollTop = thinkingProcessElement.scrollHeight;
+                                }
+                                
+                                // 处理最终结果
+                                if (json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content) {
+                                    finalResult += json.choices[0].delta.content;
+                                    finalResultElement.innerHTML = formatMessage(finalResult);
+                                }
+                                
+                            } catch (e) {
+                                console.error('解析流式数据错误:', e, '原始数据:', data);
+                            }
+                        }
+                    }
+                    
+                    // 移除加载指示器
+                    thinkingProcessElement.innerHTML = formatMessage(thinkingProcess);
+                    
+                } else {
+                    // 处理非流式响应
+                    const responseData = await response.json();
+                    
+                    // 提取思考过程和最终结果
+                    if (responseData.choices && responseData.choices.length > 0) {
+                        thinkingProcess = responseData.choices[0].thinking || 
+                                         responseData.thinking || 
+                                         "AI思考过程";
+                                         
+                        finalResult = responseData.choices[0].message?.content || "未获取到最终结果";
+                        
+                        thinkingProcessElement.innerHTML = formatMessage(thinkingProcess);
+                        finalResultElement.innerHTML = formatMessage(finalResult);
+                    } else {
+                        throw new Error('API返回格式不正确，未找到choices数组');
+                    }
+                }
+                
+                // 恢复按钮状态
+                startThinkingButton.disabled = false;
+                startThinkingButton.innerHTML = '<i class="fa fa-lightbulb-o mr-2"></i> 开始思考';
+                
+                // 添加到历史记录
+                addToHistory('deep-thinking', { 
+                    question: question.substring(0, 50) + (question.length > 50 ? '...' : ''),
+                    model,
+                    detail
+                });
+                
+                showNotification('思考完成');
+                
+            } catch (error) {
+                // 忽略中止错误（用户主动取消）
+                if (error.name !== 'AbortError') {
+                    console.error('深度思考API调用错误:', error);
+                    
+                    // 显示错误信息
+                    thinkingProcessElement.innerHTML = `<p class="text-red-500">思考过程获取失败: ${error.message}</p>`;
+                    finalResultElement.innerHTML = `<p class="text-red-500">最终结果获取失败: ${error.message}</p>`;
+                    
+                    showNotification(`思考失败: ${error.message}`, true);
+                }
+                
+                // 恢复按钮状态
+                startThinkingButton.disabled = false;
+                startThinkingButton.innerHTML = '<i class="fa fa-lightbulb-o mr-2"></i> 开始思考';
+                thinkingLoading.classList.add('hidden');
+                thinkingResult.classList.remove('hidden');
+            }
+        }
+        
+        // 图片理解功能
+        function handleImageFiles(files) {
+            // 检查API密钥
+            if (!checkAndPromptApiKey()) return;
+            
+            // 检查文件数量
+            const remainingSlots = 5 - uploadedImages.length;
+            if (files.length > remainingSlots) {
+                showNotification(`最多只能上传5张图片，已为您上传${remainingSlots}张`, true);
+                // 只取前remainingSlots个文件
+                const selectedFiles = Array.from(files).slice(0, remainingSlots);
+                processImageFiles(selectedFiles);
+            } else {
+                processImageFiles(files);
+            }
+        }
+        
+        function processImageFiles(files) {
+            Array.from(files).forEach(file => {
+                // 检查文件类型
+                if (!file.type.startsWith('image/')) {
+                    showNotification('请上传图片文件', true);
+                    return;
+                }
+                
+                // 检查文件大小
+                if (file.size > 10 * 1024 * 1024) {
+                    showNotification('图片大小不能超过10MB', true);
+                    return;
+                }
+                
+                // 读取图片并显示预览
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imageId = `img-${Date.now()}`;
+                    uploadedImages.push({
+                        id: imageId,
+                        url: e.target.result,
+                        file: file
+                    });
+                    
+                    // 显示预览容器
+                    imagePreviewContainer.classList.remove('hidden');
+                    
+                    // 创建预览元素
+                    const previewDiv = document.createElement('div');
+                    previewDiv.className = 'relative group';
+                    previewDiv.id = `preview-${imageId}`;
+                    previewDiv.innerHTML = `
+                        <img src="${e.target.result}" alt="上传的图片" class="w-full h-24 object-cover rounded-lg border border-gray-200">
+                        <button class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" 
+                                onclick="removeImage('${imageId}')">
+                            <i class="fa fa-times text-xs"></i>
+                        </button>
+                    `;
+                    
+                    imagePreviewContainer.appendChild(previewDiv);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function removeImage(imageId) {
+            // 从数组中移除
+            uploadedImages = uploadedImages.filter(img => img.id !== imageId);
+            
+            // 从DOM中移除
+            const previewElement = document.getElementById(`preview-${imageId}`);
+            if (previewElement) {
+                previewElement.remove();
+            }
+            
+            // 如果没有图片了，隐藏预览容器
+            if (uploadedImages.length === 0) {
+                imagePreviewContainer.classList.add('hidden');
+            }
+            
+            showNotification('图片已移除');
+        }
+        
+        function analyzeImages() {
+            // 检查API密钥
+            if (!checkAndPromptApiKey()) return;
+            
+            // 检查是否上传了图片
+            if (uploadedImages.length === 0) {
+                showNotification('请先上传图片', true);
+                return;
+            }
+            
+            // 检查是否输入了问题
+            const question = imageQuestion.value.trim();
+            if (!question) {
+                showNotification('请输入关于图片的问题', true);
+                return;
+            }
+            
+            // 显示加载状态
+            analyzeImageButton.disabled = true;
+            analyzeImageButton.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 分析中...';
+            imageAnalysisResult.classList.add('hidden');
+            imageAnalysisLoading.classList.remove('hidden');
+            
+            const model = imageModelSelect.value;
+            
+            // 调用图片理解API
+            callImageUnderstandingApi(question, model);
+        }
+        
+        async function callImageUnderstandingApi(question, model) {
+            try {
+                // 检查API密钥
+                if (!checkAndPromptApiKey()) return;
+                
+                // 构建内容数组
+                const content = [];
+                
+                // 添加图片
+                uploadedImages.forEach(img => {
+                    content.push({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": img.url
+                        }
+                    });
+                });
+                
+                // 添加文本问题
+                content.push({
+                    "type": "text",
+                    "text": question
+                });
+                
+                // 构建请求参数
+                const requestData = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": content
+                        }
+                    ]
+                };
+                
+                // 使用统一的API调用函数
+                const response = await callApi(API_CHAT_URL, requestData);
+                
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+                }
+                
+                const responseData = await response.json();
+                
+                // 处理API响应
+                if (responseData.choices && responseData.choices.length > 0) {
+                    const analysisResult = responseData.choices[0].message.content;
+                    
+                    // 显示结果
+                    analysisContent.innerHTML = formatMessage(analysisResult);
+                    
+                    // 恢复状态
+                    analyzeImageButton.disabled = false;
+                    analyzeImageButton.innerHTML = '<i class="fa fa-search mr-2"></i> 分析图片';
+                    imageAnalysisLoading.classList.add('hidden');
+                    imageAnalysisResult.classList.remove('hidden');
+                    
+                    // 添加到历史记录
+                    addToHistory('image-understanding', { 
+                        question, 
+                        imageCount: uploadedImages.length,
+                        model
+                    });
+                    
+                    showNotification('图片分析完成');
+                } else {
+                    throw new Error('API返回格式不正确');
+                }
+                
+            } catch (error) {
+                console.error('图片理解API调用错误:', error);
+                
+                // 恢复状态
+                analyzeImageButton.disabled = false;
+                analyzeImageButton.innerHTML = '<i class="fa fa-search mr-2"></i> 分析图片';
+                imageAnalysisLoading.classList.add('hidden');
+                
+                showNotification(`图片分析失败: ${error.message}`, true);
+            }
+        }
+        
+        function copyAnalysisResult() {
+            const text = analysisContent.textContent;
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showNotification('分析结果已复制到剪贴板');
+                })
+                .catch(err => {
+                    console.error('复制失败:', err);
+                    showNotification('复制失败，请手动复制', true);
+                });
+        }
+        
+        // 图像生成功能
+        function generateImage() {
+            // 检查API密钥
+            if (!checkAndPromptApiKey()) return;
+            
+            const prompt = imagePrompt.value.trim();
+            if (!prompt) {
+                showNotification('请输入图像描述', true);
+                return;
+            }
+            
+            // 显示加载状态
+            generateImageButton.disabled = true;
+            generateImageButton.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 生成中...';
+            generateImageResult.classList.add('hidden');
+            generateImageLoading.classList.remove('hidden');
+            
+            const model = generateImageModelSelect.value;
+            const size = generateImageSizeSelect.value;
+            
+            // 调用图像生成API
+            callImageGenerationApi(prompt, model, size);
+        }
+        
+        async function callImageGenerationApi(prompt, model, size) {
+            try {
+                // 检查API密钥
+                if (!checkAndPromptApiKey()) return;
+                
+                // 构建请求参数
+                const requestData = {
+                    "model": model,
+                    "prompt": prompt,
+                    "size": size
+                };
+                
+                // 使用统一的API调用函数
+                const response = await callApi(API_IMAGE_URL, requestData);
+                
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+                }
+                
+                const responseData = await response.json();
+                
+                // 处理API响应
+                if (responseData.data && responseData.data.length > 0) {
+                    // 清空画廊
+                    generateImageGallery.innerHTML = '';
+                    
+                    // 显示生成的图像
+                    responseData.data.forEach((item, index) => {
+                        const imgContainer = document.createElement('div');
+                        imgContainer.className = 'relative group overflow-hidden rounded-lg shadow-sm';
+                        
+                        imgContainer.innerHTML = `
+                            <img src="${item.url}" alt="生成的图像 ${index+1}" class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105">
+                            <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2 opacity-0 group-hover:opacity-100 transition-opacity flex justify-center">
+                                <button class="text-sm flex items-center" onclick="downloadGeneratedImage('${item.url}', ${index+1})">
+                                    <i class="fa fa-download mr-1"></i> 下载
+                                </button>
+                            </div>
+                        `;
+                        
+                        generateImageGallery.appendChild(imgContainer);
+                    });
+                    
+                    // 恢复状态
+                    generateImageButton.disabled = false;
+                    generateImageButton.innerHTML = '<i class="fa fa-magic mr-2"></i> 生成图像';
+                    generateImageLoading.classList.add('hidden');
+                    generateImageResult.classList.remove('hidden');
+                    
+                    // 添加到历史记录
+                    addToHistory('image', { 
+                        prompt: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''), 
+                        model, 
+                        size 
+                    });
+                    
+                    showNotification(`成功生成 ${responseData.data.length} 张图像`);
+                } else {
+                    throw new Error('API返回格式不正确');
+                }
+                
+            } catch (error) {
+                console.error('图像生成API调用错误:', error);
+                
+                // 恢复状态
+                generateImageButton.disabled = false;
+                generateImageButton.innerHTML = '<i class="fa fa-magic mr-2"></i> 生成图像';
+                generateImageLoading.classList.add('hidden');
+                
+                showNotification(`图像生成失败: ${error.message}`, true);
+            }
+        }
+        
+        function downloadGeneratedImage(url, index) {
+            fetch(url)
+                .then(response => response.blob())
+                .then(blob => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `generated-image-${index}-${new Date().toISOString().slice(0,10)}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                    showNotification('图像已下载');
+                })
+                .catch(err => {
+                    console.error('下载失败:', err);
+                    showNotification('图像下载失败', true);
+                });
+        }
+        
+        // 历史记录功能
+        function addToHistory(type, data) {
+            const types = {
+                'chat': '智能对话',
+                'deep-thinking': '深度思考',
+                'image-understanding': '图片理解',
+                'image': '图像生成'
+            };
+            
+            const record = {
+                id: Date.now(),
+                type,
+                typeName: types[type],
+                data,
+                timestamp: new Date().toISOString()
+            };
+            
+            historyRecords.unshift(record);
+            // 限制历史记录数量
+            if (historyRecords.length > 20) {
+                historyRecords = historyRecords.slice(0, 20);
+            }
+            
+            localStorage.setItem('aiApiHistory', JSON.stringify(historyRecords));
+            updateHistoryList();
+        }
+        
+        function updateHistoryList() {
+            if (historyRecords.length === 0) {
+                historyList.innerHTML = `
+                    <div class="text-center text-gray-500 py-10 bg-gray-50 rounded-xl">
+                        <i class="fa fa-history text-4xl mb-3 opacity-30"></i>
+                        <p>暂无历史记录</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            historyList.innerHTML = '';
+            
+            historyRecords.forEach(record => {
+                const date = new Date(record.timestamp);
+                const formattedDate = `${date.getMonth()+1}月${date.getDate()}日 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                
+                let icon, content;
+                
+                switch (record.type) {
+                    case 'chat':
+                        icon = '<i class="fa fa-comments text-primary"></i>';
+                        content = `<p class="text-sm text-gray-600 line-clamp-2">${record.data.text}</p>`;
+                        break;
+                    case 'deep-thinking':
+                        icon = '<i class="fa fa-lightbulb-o text-yellow-500"></i>';
+                        content = `<p class="text-sm text-gray-600 line-clamp-2">${record.data.question}</p>`;
+                        break;
+                    case 'image-understanding':
+                        icon = '<i class="fa fa-eye text-green-600"></i>';
+                        content = `<p class="text-sm text-gray-600 line-clamp-2">${record.data.question}</p>`;
+                        break;
+                    case 'image':
+                        icon = '<i class="fa fa-picture-o text-orange-500"></i>';
+                        content = `<p class="text-sm text-gray-600 line-clamp-2">${record.data.prompt}</p>`;
+                        break;
+                }
+                
+                const recordDiv = document.createElement('div');
+                recordDiv.className = 'bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow';
+                recordDiv.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                ${icon}
+                            </div>
+                            <div>
+                                <div class="flex items-center">
+                                    <h4 class="font-medium text-gray-900">${record.typeName}</h4>
+                                    <span class="text-xs text-gray-500 ml-2">${formattedDate}</span>
+                                </div>
+                                ${content}
+                            </div>
+                        </div>
+                        <button class="text-gray-400 hover:text-red-500 transition-colors" onclick="deleteHistoryRecord(${record.id})">
+                            <i class="fa fa-trash-o"></i>
+                        </button>
+                    </div>
+                `;
+                
+                historyList.appendChild(recordDiv);
+            });
+        }
+        
+        function deleteHistoryRecord(id) {
+            historyRecords = historyRecords.filter(record => record.id !== id);
+            localStorage.setItem('aiApiHistory', JSON.stringify(historyRecords));
+            updateHistoryList();
+            showNotification('历史记录已删除');
+        }
+        
+        // 全局函数，供HTML中调用
+        window.removeImage = removeImage;
+        window.downloadGeneratedImage = downloadGeneratedImage;
+        window.deleteHistoryRecord = deleteHistoryRecord;
+        
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
